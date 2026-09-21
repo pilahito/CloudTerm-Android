@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Intent
 import android.os.Build
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -19,8 +20,12 @@ import com.pilahito.cloudterm.android.data.SecretVault
 import com.pilahito.cloudterm.android.ftp.FtpConnection
 import com.pilahito.cloudterm.android.net.RemoteFs
 import com.pilahito.cloudterm.android.ssh.SshConnection
+import com.pilahito.cloudterm.android.update.AppUpdater
+import com.pilahito.cloudterm.android.update.UpdateInfo
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.UnknownHostException
 
@@ -45,6 +50,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var biometricEnabled by mutableStateOf(lock.biometricEnabled)
         private set
+
+    val installedVersion = AppUpdater.currentVersion(app)
+    var update by mutableStateOf<UpdateInfo?>(null)
+        private set
+    var updateBusy by mutableStateOf<String?>(null)
+        private set
+    var updateProgress by mutableIntStateOf(-1)
+        private set
+    var updateNotice by mutableStateOf<String?>(null)
+
+    init {
+        checkForUpdate(silent = true)
+    }
 
     fun setBiometric(enabled: Boolean) {
         lock.biometricEnabled = enabled
@@ -141,6 +159,54 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         session?.close()
         session = null
         pararServicio()
+    }
+
+    fun checkForUpdate(silent: Boolean = false) {
+        if (updateBusy != null) return
+        updateBusy = if (silent) null else "Buscando actualización…"
+        viewModelScope.launch {
+            try {
+                val info = withContext(Dispatchers.IO) { AppUpdater.check(installedVersion) }
+                update = info
+                updateBusy = null
+                if (!silent && !info.newer) {
+                    updateNotice = "Ya tienes la última ($installedVersion)."
+                }
+            } catch (e: Exception) {
+                updateBusy = null
+                if (!silent) updateNotice = "No se pudo mirar GitHub: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }
+    }
+
+    fun dismissUpdate() {
+        update = update?.copy(newer = false)
+    }
+
+    fun downloadAndInstall() {
+        val info = update ?: return
+        val app = getApplication<Application>()
+        if (AppUpdater.needsInstallPermission(app)) {
+            updateNotice = "Activa «Permitir de esta fuente» para CloudTerm y pulsa Actualizar otra vez."
+            AppUpdater.openInstallPermission(app)
+            return
+        }
+        updateBusy = "Descargando ${info.tag}…"
+        updateProgress = 0
+        viewModelScope.launch {
+            try {
+                val apk = withContext(Dispatchers.IO) {
+                    AppUpdater.download(app, info.apkUrl) { p -> updateProgress = p }
+                }
+                updateBusy = "Instalando…"
+                AppUpdater.install(app, apk)
+            } catch (e: Exception) {
+                updateNotice = "No se pudo descargar: ${e.message ?: e.javaClass.simpleName}"
+            } finally {
+                updateBusy = null
+                updateProgress = -1
+            }
+        }
     }
 
     private fun arrancarServicio(nombre: String) {
