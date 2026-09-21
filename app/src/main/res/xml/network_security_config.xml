@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
+    <!-- FTP usa texto plano en el 21; SSH/SFTP/FTPS van cifrados por su cuenta. -->
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

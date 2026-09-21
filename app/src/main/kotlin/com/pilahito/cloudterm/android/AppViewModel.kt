@@ -11,7 +11,10 @@ import androidx.lifecycle.viewModelScope
 import com.pilahito.cloudterm.android.data.AuthType
 import com.pilahito.cloudterm.android.data.Host
 import com.pilahito.cloudterm.android.data.HostStore
+import com.pilahito.cloudterm.android.data.Protocol
 import com.pilahito.cloudterm.android.data.SecretVault
+import com.pilahito.cloudterm.android.ftp.FtpConnection
+import com.pilahito.cloudterm.android.net.RemoteFs
 import com.pilahito.cloudterm.android.ssh.SshConnection
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
@@ -44,10 +47,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         store.save(hosts)
 
-        if (host.authType == AuthType.PASSWORD) {
+        if (host.authType == AuthType.PASSWORD || host.protocol == Protocol.FTP || host.protocol == Protocol.FTPS) {
             if (password.isNotEmpty()) vault.put("pw:${host.id}", password)
-            vault.remove("key:${host.id}")
-            vault.remove("pass:${host.id}")
+            if (host.protocol == Protocol.FTP || host.protocol == Protocol.FTPS) {
+                vault.remove("key:${host.id}")
+                vault.remove("pass:${host.id}")
+            }
         } else {
             if (!keyText.isNullOrBlank()) {
                 vault.put("key:${host.id}", if (keyText.endsWith("\n")) keyText else keyText + "\n")
@@ -68,16 +73,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun connect(host: Host) {
         if (connecting != null || session != null) return
         connecting = host
-        val conn = SshConnection(
-            host = host,
-            password = vault.get("pw:${host.id}"),
-            privateKey = vault.get("key:${host.id}"),
-            passphrase = vault.get("pass:${host.id}"),
-            knownHosts = File(getApplication<Application>().filesDir, "known_hosts"),
-        ) { message ->
-            val decision = CompletableDeferred<Boolean>()
-            hostKeyRequest = HostKeyRequest(message, decision)
-            decision.await()
+        val conn: RemoteFs = when (host.protocol) {
+            Protocol.FTP, Protocol.FTPS -> FtpConnection(host, vault.get("pw:${host.id}"))
+            Protocol.SSH, Protocol.SFTP -> SshConnection(
+                host = host,
+                password = vault.get("pw:${host.id}"),
+                privateKey = vault.get("key:${host.id}"),
+                passphrase = vault.get("pass:${host.id}"),
+                knownHosts = File(getApplication<Application>().filesDir, "known_hosts"),
+            ) { message ->
+                val decision = CompletableDeferred<Boolean>()
+                hostKeyRequest = HostKeyRequest(message, decision)
+                decision.await()
+            }
         }
         viewModelScope.launch {
             try {
@@ -91,7 +99,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 arrancarServicio(host.name)
             } catch (e: Exception) {
                 conn.close()
-                error = friendly(e)
+                error = friendly(e, host)
             } finally {
                 connecting = null
             }
@@ -121,20 +129,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         app.stopService(Intent(app, SshSessionService::class.java).setAction(SshSessionService.ACTION_STOP))
     }
 
-    private fun friendly(e: Exception): String {
+    private fun friendly(e: Exception, host: Host? = null): String {
         val msg = e.message.orEmpty()
+        val port = host?.port ?: 22
         return when {
+            host?.protocol == Protocol.FTP || host?.protocol == Protocol.FTPS ->
+                msg.ifBlank { "No se pudo conectar por ${host.protocol.label} al puerto $port." }
+            port in setOf(21, 989, 990) || msg.contains("FTP/FTPS") ->
+                "Ese puerto es FTPS/FTP. Cambia el protocolo del servidor a FTP o FTPS."
             msg.contains("HostKey has been changed") ->
-                "¡La clave del servidor ha cambiado! Puede ser un ataque de intermediario. " +
-                    "Si sabes que el servidor se reinstaló, borra los datos de la app para olvidar la clave anterior."
+                "¡La clave del servidor ha cambiado! Si se reinstaló, borra los datos de la app."
             msg.contains("Auth fail") || msg.contains("Auth cancel") ->
                 "Usuario, contraseña o clave incorrectos."
             e is UnknownHostException || msg.contains("UnknownHost") ->
                 "No se encuentra el servidor. Revisa la dirección."
             msg.contains("timeout", ignoreCase = true) ->
                 "El servidor no responde (tiempo agotado)."
-            msg.contains("Connection refused", ignoreCase = true) ->
-                "Conexión rechazada. Revisa el puerto."
+            msg.contains("Connection refused", ignoreCase = true) || msg.contains("rechazada") ->
+                "Conexión rechazada en el puerto $port."
+            msg.contains("identificación inválida") || msg.contains("invalid identification") ->
+                "Ese puerto no habla el protocolo SSH."
             msg.contains("reject HostKey") || msg.contains("HostKey") ->
                 "Conexión cancelada: clave del servidor no aceptada."
             else -> msg.ifBlank { e.javaClass.simpleName }

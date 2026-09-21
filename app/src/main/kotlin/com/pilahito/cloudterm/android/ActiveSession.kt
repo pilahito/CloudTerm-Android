@@ -7,8 +7,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.pilahito.cloudterm.android.data.Host
+import com.pilahito.cloudterm.android.net.RemoteFs
 import com.pilahito.cloudterm.android.ssh.RemoteFile
-import com.pilahito.cloudterm.android.ssh.SshConnection
 import com.pilahito.cloudterm.android.ssh.joinPath
 import com.pilahito.cloudterm.android.ssh.parentPath
 import kotlinx.coroutines.CoroutineScope
@@ -18,10 +18,9 @@ import java.io.IOException
 
 data class Transfer(val label: String, val done: Long, val total: Long)
 
-/** Sesión abierta: la conexión y el estado del explorador de archivos. */
 class ActiveSession(
     val host: Host,
-    val conn: SshConnection,
+    val conn: RemoteFs,
     private val scope: CoroutineScope,
     private val resolver: ContentResolver,
 ) {
@@ -31,6 +30,13 @@ class ActiveSession(
     var notice by mutableStateOf<String?>(null)
     var transfer by mutableStateOf<Transfer?>(null)
     var shellClosed by mutableStateOf(false)
+
+    var editorPath by mutableStateOf<String?>(null)
+    var editorName by mutableStateOf("")
+    var editorText by mutableStateOf("")
+    var editorDirty by mutableStateOf(false)
+    var editorLoading by mutableStateOf(false)
+    var editorOpen by mutableStateOf(false)
 
     init {
         conn.onShellClosed = { shellClosed = true }
@@ -154,6 +160,45 @@ class ActiveSession(
                 notice = "Error al subir: ${e.message}"
             } finally {
                 transfer = null
+            }
+        }
+    }
+
+    fun openEditor(file: RemoteFile) {
+        editorOpen = true
+        editorPath = file.path
+        editorName = file.name
+        editorLoading = true
+        editorDirty = false
+        scope.launch {
+            try {
+                editorText = conn.readText(file.path)
+            } catch (e: Exception) {
+                notice = "No se pudo abrir el código: ${e.message}"
+                editorOpen = false
+            } finally {
+                editorLoading = false
+            }
+        }
+    }
+
+    fun onEditorChange(text: String) {
+        editorText = text
+        editorDirty = true
+    }
+
+    fun saveEditor() {
+        val remote = editorPath ?: return
+        editorLoading = true
+        scope.launch {
+            try {
+                conn.writeText(remote, editorText)
+                editorDirty = false
+                notice = "Guardado: $editorName"
+            } catch (e: Exception) {
+                notice = "No se pudo guardar: ${e.message}"
+            } finally {
+                editorLoading = false
             }
         }
     }

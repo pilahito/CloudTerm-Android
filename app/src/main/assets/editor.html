@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<style>
+  html, body { margin: 0; height: 100%; background: #0f1419; color: #e6edf3; font-family: ui-monospace, Consolas, monospace; }
+  #bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #161b22; border-bottom: 1px solid #30363d; font-size: 12px; }
+  #name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #7ee787; }
+  button { background: #238636; color: #fff; border: 0; border-radius: 6px; padding: 6px 10px; font-weight: 600; }
+  button[disabled] { opacity: .45; }
+  #wrap { display: flex; height: calc(100% - 41px); }
+  #gutter { width: 42px; padding: 8px 6px; text-align: right; color: #6e7681; background: #0d1117; overflow: hidden; font-size: 12px; line-height: 1.55; user-select: none; }
+  #code { flex: 1; margin: 0; border: 0; outline: 0; resize: none; background: #0f1419; color: #e6edf3; padding: 8px; font: 13px/1.55 ui-monospace, Consolas, monospace; tab-size: 2; white-space: pre; overflow: auto; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <div id="name">sin archivo</div>
+  <span id="lang"></span>
+  <button id="save" onclick="doSave()">Guardar</button>
+</div>
+<div id="wrap">
+  <div id="gutter"></div>
+  <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+</div>
+<script>
+  const code = document.getElementById('code');
+  const gutter = document.getElementById('gutter');
+  const nameEl = document.getElementById('name');
+  const langEl = document.getElementById('lang');
+  function lines() {
+    const n = code.value.split('\n').length;
+    let s = '';
+    for (let i = 1; i <= n; i++) s += i + '\n';
+    gutter.textContent = s;
+  }
+  function paint() {
+    const v = code.value;
+    // Colorea de forma ligera vía CSS no es posible en textarea;
+    // el gutter + tema oscuro dan el aspecto de IDE. El lenguaje se etiqueta.
+    lines();
+  }
+  code.addEventListener('input', function () {
+    paint();
+    try { Android.changed(code.value); } catch (e) {}
+  });
+  code.addEventListener('scroll', function () { gutter.scrollTop = code.scrollTop; });
+  function doSave() {
+    try { Android.save(code.value); } catch (e) {}
+  }
+  function setFile(name, text, language) {
+    nameEl.textContent = name || 'sin archivo';
+    langEl.textContent = language || '';
+    code.value = text || '';
+    paint();
+    code.focus();
+  }
+  function languageOf(name) {
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    const map = {kt:'Kotlin',kts:'Kotlin',java:'Java',js:'JavaScript',ts:'TypeScript',tsx:'TSX',jsx:'JSX',py:'Python',rb:'Ruby',go:'Go',rs:'Rust',c:'C',h:'C',cpp:'C++',cs:'C#',php:'PHP',html:'HTML',css:'CSS',json:'JSON',xml:'XML',md:'Markdown',sh:'Shell',yml:'YAML',yaml:'YAML',sql:'SQL'};
+    return map[ext] || ext.toUpperCase();
+  }
+  window.setFile = setFile;
+  window.languageOf = languageOf;
+  try { Android.ready(); } catch (e) {}
+</script>
+</body>
+</html>

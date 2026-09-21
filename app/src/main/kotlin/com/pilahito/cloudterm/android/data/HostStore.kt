@@ -5,7 +5,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** Lista de servidores en un JSON dentro del directorio privado de la app. Sin credenciales. */
 class HostStore(context: Context) {
     private val file = File(context.filesDir, "hosts.json")
 
@@ -23,9 +22,11 @@ class HostStore(context: Context) {
                     username = o.getString("username"),
                     authType = runCatching { AuthType.valueOf(o.optString("auth", "PASSWORD")) }
                         .getOrDefault(AuthType.PASSWORD),
+                    protocol = runCatching { Protocol.valueOf(o.optString("protocol", "SSH")) }
+                        .getOrDefault(Protocol.SSH),
                 )
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }
@@ -41,6 +42,7 @@ class HostStore(context: Context) {
                     .put("port", h.port)
                     .put("username", h.username)
                     .put("auth", h.authType.name)
+                    .put("protocol", h.protocol.name),
             )
         }
         file.writeText(arr.toString())

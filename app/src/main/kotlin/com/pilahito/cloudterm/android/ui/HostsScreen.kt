@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.pilahito.cloudterm.android.AppViewModel
 import com.pilahito.cloudterm.android.data.AuthType
 import com.pilahito.cloudterm.android.data.Host
+import com.pilahito.cloudterm.android.data.Protocol
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,7 +68,7 @@ fun HostsScreen(vm: AppViewModel) {
         if (vm.hosts.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) {
                 Text(
-                    "Añade tu primer servidor con el botón +",
+                    "Añade tu primer servidor (SSH, SFTP, FTP o FTPS)",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -84,7 +85,7 @@ fun HostsScreen(vm: AppViewModel) {
                     ) {
                         Row(Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(host.name, style = MaterialTheme.typography.titleMedium)
+                                Text("${host.name}  ·  ${host.protocol.label}", style = MaterialTheme.typography.titleMedium)
                                 Text(
                                     "${host.username}@${host.hostname}:${host.port}",
                                     style = MaterialTheme.typography.bodySmall,
@@ -141,12 +142,16 @@ private fun HostDialog(
     val ctx = LocalContext.current
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var hostname by remember { mutableStateOf(initial?.hostname ?: "") }
-    var port by remember { mutableStateOf((initial?.port ?: 22).toString()) }
+    var protocol by remember { mutableStateOf(initial?.protocol ?: Protocol.SSH) }
+    var port by remember { mutableStateOf((initial?.port ?: protocol.defaultPort).toString()) }
     var user by remember { mutableStateOf(initial?.username ?: "") }
     var auth by remember { mutableStateOf(initial?.authType ?: AuthType.PASSWORD) }
     var password by remember { mutableStateOf("") }
     var passphrase by remember { mutableStateOf("") }
     var keyText by remember { mutableStateOf<String?>(null) }
+
+    val ftpLike = protocol == Protocol.FTP || protocol == Protocol.FTPS
+    if (ftpLike && auth != AuthType.PASSWORD) auth = AuthType.PASSWORD
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
@@ -171,6 +176,19 @@ private fun HostDialog(
                     label = { Text("Dirección") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
+                Text("Protocolo", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Protocol.entries.forEach { p ->
+                        FilterChip(
+                            selected = protocol == p,
+                            onClick = {
+                                protocol = p
+                                port = p.defaultPort.toString()
+                            },
+                            label = { Text(p.label) },
+                        )
+                    }
+                }
                 OutlinedTextField(
                     port, { port = it.filter(Char::isDigit) },
                     label = { Text("Puerto") }, singleLine = true,
@@ -178,20 +196,22 @@ private fun HostDialog(
                 )
                 OutlinedTextField(user, { user = it }, label = { Text("Usuario") }, singleLine = true)
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = auth == AuthType.PASSWORD,
-                        onClick = { auth = AuthType.PASSWORD },
-                        label = { Text("Contraseña") },
-                    )
-                    FilterChip(
-                        selected = auth == AuthType.KEY,
-                        onClick = { auth = AuthType.KEY },
-                        label = { Text("Clave privada") },
-                    )
+                if (!ftpLike) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = auth == AuthType.PASSWORD,
+                            onClick = { auth = AuthType.PASSWORD },
+                            label = { Text("Contraseña") },
+                        )
+                        FilterChip(
+                            selected = auth == AuthType.KEY,
+                            onClick = { auth = AuthType.KEY },
+                            label = { Text("Clave privada") },
+                        )
+                    }
                 }
 
-                if (auth == AuthType.PASSWORD) {
+                if (auth == AuthType.PASSWORD || ftpLike) {
                     OutlinedTextField(
                         password, { password = it },
                         label = { Text(if (initial != null) "Contraseña (vacío = no cambiar)" else "Contraseña") },
@@ -223,7 +243,8 @@ private fun HostDialog(
                         hostname = hostname.trim(),
                         port = port.toInt(),
                         username = user.trim(),
-                        authType = auth,
+                        authType = if (ftpLike) AuthType.PASSWORD else auth,
+                        protocol = protocol,
                     )
                     onSave(host, password, keyText, passphrase)
                 },

@@ -1,17 +1,24 @@
 package com.pilahito.cloudterm.android.ssh
 
+import com.jcraft.jsch.Channel
+import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.ChannelShell
 import com.jcraft.jsch.JSch
+import com.jcraft.jsch.JSchException
 import com.jcraft.jsch.Session
 import com.jcraft.jsch.SftpProgressMonitor
+import com.jcraft.jsch.UIKeyboardInteractive
 import com.jcraft.jsch.UserInfo
 import com.pilahito.cloudterm.android.data.Host
+import com.pilahito.cloudterm.android.net.RemoteFs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -35,11 +42,6 @@ fun parentPath(path: String): String {
     return if (i <= 0) "/" else t.substring(0, i)
 }
 
-/**
- * Una conexión SSH con un canal de shell (terminal) y un canal SFTP (archivos).
- * La clave del servidor se verifica contra un known_hosts propio: la primera vez
- * se pregunta al usuario y, si después cambia, la conexión se rechaza.
- */
 class SshConnection(
     private val host: Host,
     private val password: String?,
@@ -47,21 +49,30 @@ class SshConnection(
     private val passphrase: String?,
     private val knownHosts: File,
     private val confirmHostKey: suspend (String) -> Boolean,
-) {
+) : RemoteFs {
     private var session: Session? = null
-    private var shell: ChannelShell? = null
+    private var shell: Channel? = null
     private var shellOut: OutputStream? = null
     private var sftp: ChannelSftp? = null
     private val sftpLock = Mutex()
     private val writer = Executors.newSingleThreadExecutor()
 
-    @Volatile
-    var outputSink: ((ByteArray) -> Unit)? = null
+    override val hasTerminal: Boolean = true
 
     @Volatile
-    var onShellClosed: (() -> Unit)? = null
+    override var outputSink: ((ByteArray) -> Unit)? = null
 
-    suspend fun connect() = withContext(Dispatchers.IO) {
+    @Volatile
+    override var onShellClosed: (() -> Unit)? = null
+
+    override suspend fun connect() = withContext(Dispatchers.IO) {
+        if (host.port in FTPS_PORTS) {
+            throw JSchException(
+                "El puerto ${host.port} es de FTP/FTPS, no de SSH. " +
+                    "Elige el protocolo FTP o FTPS en el servidor, o usa el puerto 22 para SSH.",
+            )
+        }
+
         val jsch = JSch()
         if (!knownHosts.exists()) knownHosts.createNewFile()
         jsch.setKnownHosts(knownHosts.absolutePath)
@@ -75,34 +86,39 @@ class SshConnection(
         if (!password.isNullOrEmpty()) s.setPassword(password)
         s.setConfig("StrictHostKeyChecking", "ask")
         s.setConfig("PreferredAuthentications", "publickey,keyboard-interactive,password")
+        s.setConfig("MaxAuthTries", "5")
         s.timeout = 20_000
-        s.setUserInfo(object : UserInfo {
-            override fun getPassphrase(): String? = passphrase
-            override fun getPassword(): String? = password
-            override fun promptPassword(message: String?): Boolean = !password.isNullOrEmpty()
-            override fun promptPassphrase(message: String?): Boolean = !passphrase.isNullOrEmpty()
-            override fun promptYesNo(message: String?): Boolean =
-                runBlocking { confirmHostKey(message.orEmpty()) }
-
-            override fun showMessage(message: String?) {}
-        })
-        s.setServerAliveInterval(30_000)
-        s.connect(15_000)
+        s.setUserInfo(InteractiveUserInfo(password, passphrase, confirmHostKey))
+        s.setServerAliveInterval(15_000)
+        s.setServerAliveCountMax(4)
+        try {
+            s.connect(20_000)
+        } catch (e: JSchException) {
+            throw remapConnectError(e)
+        }
         session = s
     }
 
-    /* ------------------------------ Terminal ------------------------------ */
-
-    /** Abre el shell una sola vez; llamadas posteriores no hacen nada. */
-    fun openShell(cols: Int, rows: Int) {
+    override fun openShell(cols: Int, rows: Int) {
         if (shell != null) return
-        val s = session ?: return
-        val ch = s.openChannel("shell") as ChannelShell
-        ch.setPtyType("xterm-256color")
-        ch.setPtySize(cols, rows, 0, 0)
-        val input = ch.inputStream
+        val s = session ?: throw IllegalStateException("sesión SSH no conectada")
+
+        val input: InputStream
+        val ch: Channel = try {
+            openPtyShell(s, cols, rows)
+        } catch (first: Exception) {
+            try {
+                openPtyExec(s, cols, rows)
+            } catch (second: Exception) {
+                throw JSchException(
+                    "El servidor aceptó SSH/SFTP pero no un terminal interactivo " +
+                        "(canal shell/exec denegado). Muchos hostings solo permiten SFTP. " +
+                        "shell=${first.message}; exec=${second.message}",
+                )
+            }
+        }
+        input = ch.inputStream
         shellOut = ch.outputStream
-        ch.connect(10_000)
         shell = ch
 
         Thread {
@@ -122,7 +138,30 @@ class SshConnection(
         }
     }
 
-    fun write(data: ByteArray) {
+    private fun openPtyShell(s: Session, cols: Int, rows: Int): ChannelShell {
+        val ch = s.openChannel("shell") as ChannelShell
+        ch.setPtyType("xterm-256color")
+        ch.setPtySize(cols, rows, 0, 0)
+        ch.setEnv("LANG", "en_US.UTF-8")
+        ch.setEnv("TERM", "xterm-256color")
+        ch.connect(12_000)
+        if (!ch.isConnected) throw JSchException("canal shell no conectado")
+        return ch
+    }
+
+    private fun openPtyExec(s: Session, cols: Int, rows: Int): ChannelExec {
+        val ch = s.openChannel("exec") as ChannelExec
+        ch.setPty(true)
+        ch.setPtyType("xterm-256color", cols, rows, 0, 0)
+        ch.setEnv("LANG", "en_US.UTF-8")
+        ch.setEnv("TERM", "xterm-256color")
+        ch.setCommand("exec bash -l || exec sh -l || exec /bin/sh")
+        ch.connect(12_000)
+        if (!ch.isConnected) throw JSchException("canal exec no conectado")
+        return ch
+    }
+
+    override fun write(data: ByteArray) {
         writer.execute {
             try {
                 shellOut?.write(data)
@@ -132,16 +171,17 @@ class SshConnection(
         }
     }
 
-    fun resize(cols: Int, rows: Int) {
+    override fun resize(cols: Int, rows: Int) {
         writer.execute {
             try {
-                shell?.setPtySize(cols, rows, 0, 0)
+                when (val ch = shell) {
+                    is ChannelShell -> ch.setPtySize(cols, rows, 0, 0)
+                    is ChannelExec -> ch.setPtySize(cols, rows, 0, 0)
+                }
             } catch (_: Exception) {
             }
         }
     }
-
-    /* -------------------------------- SFTP -------------------------------- */
 
     private fun channel(): ChannelSftp {
         val existing = sftp
@@ -152,11 +192,11 @@ class SshConnection(
         return ch
     }
 
-    suspend fun home(): String = sftpLock.withLock {
+    override suspend fun home(): String = sftpLock.withLock {
         withContext(Dispatchers.IO) { channel().pwd() }
     }
 
-    suspend fun list(dir: String): List<RemoteFile> = sftpLock.withLock {
+    override suspend fun list(dir: String): List<RemoteFile> = sftpLock.withLock {
         withContext(Dispatchers.IO) {
             val ch = channel()
             ch.ls(dir)
@@ -179,7 +219,7 @@ class SshConnection(
         }
     }
 
-    suspend fun download(remote: String, out: OutputStream, onBytes: (Long) -> Unit) =
+    override suspend fun download(remote: String, out: OutputStream, onBytes: (Long) -> Unit) =
         sftpLock.withLock {
             withContext(Dispatchers.IO) {
                 var total = 0L
@@ -190,13 +230,12 @@ class SshConnection(
                         onBytes(total)
                         return true
                     }
-
                     override fun end() {}
                 })
             }
         }
 
-    suspend fun upload(input: InputStream, remote: String, onBytes: (Long) -> Unit) =
+    override suspend fun upload(input: InputStream, remote: String, onBytes: (Long) -> Unit) =
         sftpLock.withLock {
             withContext(Dispatchers.IO) {
                 var total = 0L
@@ -207,21 +246,20 @@ class SshConnection(
                         onBytes(total)
                         return true
                     }
-
                     override fun end() {}
                 }, ChannelSftp.OVERWRITE)
             }
         }
 
-    suspend fun mkdir(path: String) = sftpLock.withLock {
+    override suspend fun mkdir(path: String) = sftpLock.withLock {
         withContext(Dispatchers.IO) { channel().mkdir(path) }
     }
 
-    suspend fun rename(from: String, to: String) = sftpLock.withLock {
+    override suspend fun rename(from: String, to: String) = sftpLock.withLock {
         withContext(Dispatchers.IO) { channel().rename(from, to) }
     }
 
-    suspend fun delete(file: RemoteFile) = sftpLock.withLock {
+    override suspend fun delete(file: RemoteFile) = sftpLock.withLock {
         withContext(Dispatchers.IO) { deleteRecursive(channel(), file.path, file.isDir) }
     }
 
@@ -238,12 +276,92 @@ class SshConnection(
         }
     }
 
-    fun close() {
+    override suspend fun readText(path: String, maxBytes: Long): String = sftpLock.withLock {
+        withContext(Dispatchers.IO) {
+            val attrs = channel().stat(path)
+            if (attrs.getSize() > maxBytes) {
+                throw IllegalStateException("El archivo pesa ${attrs.getSize()} bytes (máximo $maxBytes)")
+            }
+            val buf = ByteArrayOutputStream()
+            channel().get(path, buf)
+            buf.toString(Charsets.UTF_8.name())
+        }
+    }
+
+    override suspend fun writeText(path: String, text: String) = sftpLock.withLock {
+        withContext(Dispatchers.IO) {
+            val bytes = text.toByteArray(Charsets.UTF_8)
+            channel().put(ByteArrayInputStream(bytes), path, ChannelSftp.OVERWRITE)
+        }
+    }
+
+    override fun close() {
         Thread {
             runCatching { shell?.disconnect() }
             runCatching { sftp?.disconnect() }
             runCatching { session?.disconnect() }
             writer.shutdown()
         }.start()
+    }
+
+    private fun remapConnectError(e: JSchException): JSchException {
+        val msg = e.message.orEmpty()
+        val lower = msg.lowercase()
+        if (lower.contains("auth fail") || lower.contains("auth cancel")) {
+            return JSchException(
+                "Auth fail: usuario, contraseña o clave incorrectos, o el servidor " +
+                    "exige un método que no enviamos. Prueba clave ed25519 o revisa que SSH " +
+                    "esté abierto en el puerto ${host.port} (no confundir con FTPS).",
+                e,
+            )
+        }
+        if (lower.contains("connection refused") || lower.contains("econnrefused")) {
+            return JSchException(
+                "Conexión rechazada en ${host.hostname}:${host.port}. " +
+                    "Ese puerto no habla SSH. Usa el protocolo FTP/FTPS o el puerto 22.",
+                e,
+            )
+        }
+        if (lower.contains("invalid version") || lower.contains("invalid identification") ||
+            lower.contains("protocol error") || lower.contains("session.connect")
+        ) {
+            return JSchException(
+                "El servidor en ${host.hostname}:${host.port} no habla SSH. " +
+                    "Si FTPS te funciona ahí, crea el servidor con protocolo FTPS.",
+                e,
+            )
+        }
+        return e
+    }
+
+    companion object {
+        private val FTPS_PORTS = setOf(21, 989, 990)
+    }
+}
+
+private class InteractiveUserInfo(
+    private val password: String?,
+    private val passphrase: String?,
+    private val confirmHostKey: suspend (String) -> Boolean,
+) : UserInfo, UIKeyboardInteractive {
+    override fun getPassphrase(): String? = passphrase
+    override fun getPassword(): String? = password
+    override fun promptPassword(message: String?): Boolean = !password.isNullOrEmpty()
+    override fun promptPassphrase(message: String?): Boolean = !passphrase.isNullOrEmpty()
+    override fun promptYesNo(message: String?): Boolean =
+        runBlocking { confirmHostKey(message.orEmpty()) }
+
+    override fun showMessage(message: String?) {}
+
+    override fun promptKeyboardInteractive(
+        destination: String?,
+        name: String?,
+        instruction: String?,
+        prompt: Array<out String>?,
+        echo: BooleanArray?,
+    ): Array<String>? {
+        val pw = password ?: return null
+        if (prompt.isNullOrEmpty()) return emptyArray()
+        return Array(prompt.size) { pw }
     }
 }
