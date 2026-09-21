@@ -24,6 +24,10 @@ val CtText = Color(0xFFF4FBFF)
 val CtMuted = Color(0xFF8AA3B2)
 val CtOnline = Color(0xFF34E0A1)
 
+val AppBackground = CtBg
+val AppSurface = CtSurface
+val AppKey = Color(0xFF1A2C36)
+
 private val Scheme = darkColorScheme(
     primary = CtAccent,
     onPrimary = Color(0xFF042026),
