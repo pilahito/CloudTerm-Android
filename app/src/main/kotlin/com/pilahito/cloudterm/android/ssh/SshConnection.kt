@@ -1,10 +1,14 @@
 package com.pilahito.cloudterm.android.ssh
 
+import com.jcraft.jsch.Channel
+import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.ChannelShell
 import com.jcraft.jsch.JSch
+import com.jcraft.jsch.JSchException
 import com.jcraft.jsch.Session
 import com.jcraft.jsch.SftpProgressMonitor
+import com.jcraft.jsch.UIKeyboardInteractive
 import com.jcraft.jsch.UserInfo
 import com.pilahito.cloudterm.android.data.Host
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +43,11 @@ fun parentPath(path: String): String {
  * Una conexión SSH con un canal de shell (terminal) y un canal SFTP (archivos).
  * La clave del servidor se verifica contra un known_hosts propio: la primera vez
  * se pregunta al usuario y, si después cambia, la conexión se rechaza.
+ *
+ * Importante: muchos OpenSSH desactivan `password` y solo aceptan
+ * `keyboard-interactive`. Sin UIKeyboardInteractive JSch falla con Auth fail
+ * aunque la contraseña sea correcta. SFTP puede funcionar en el mismo servidor
+ * si el hosting expone un daemon distinto (o FTPS en 21/990), de ahí la confusión.
  */
 class SshConnection(
     private val host: Host,
@@ -49,7 +58,7 @@ class SshConnection(
     private val confirmHostKey: suspend (String) -> Boolean,
 ) {
     private var session: Session? = null
-    private var shell: ChannelShell? = null
+    private var shell: Channel? = null
     private var shellOut: OutputStream? = null
     private var sftp: ChannelSftp? = null
     private val sftpLock = Mutex()
@@ -62,6 +71,14 @@ class SshConnection(
     var onShellClosed: (() -> Unit)? = null
 
     suspend fun connect() = withContext(Dispatchers.IO) {
+        if (host.port in FTPS_PORTS) {
+            throw JSchException(
+                "El puerto ${host.port} es de FTP/FTPS, no de SSH. " +
+                    "SSH usa el puerto 22 (a veces 2222). FTPS y SSH no son el mismo protocolo: " +
+                    "si tu hosting solo da FTPS, el terminal no puede existir.",
+            )
+        }
+
         val jsch = JSch()
         if (!knownHosts.exists()) knownHosts.createNewFile()
         jsch.setKnownHosts(knownHosts.absolutePath)
@@ -75,34 +92,42 @@ class SshConnection(
         if (!password.isNullOrEmpty()) s.setPassword(password)
         s.setConfig("StrictHostKeyChecking", "ask")
         s.setConfig("PreferredAuthentications", "publickey,keyboard-interactive,password")
+        s.setConfig("MaxAuthTries", "5")
         s.timeout = 20_000
-        s.setUserInfo(object : UserInfo {
-            override fun getPassphrase(): String? = passphrase
-            override fun getPassword(): String? = password
-            override fun promptPassword(message: String?): Boolean = !password.isNullOrEmpty()
-            override fun promptPassphrase(message: String?): Boolean = !passphrase.isNullOrEmpty()
-            override fun promptYesNo(message: String?): Boolean =
-                runBlocking { confirmHostKey(message.orEmpty()) }
-
-            override fun showMessage(message: String?) {}
-        })
-        s.setServerAliveInterval(30_000)
-        s.connect(15_000)
+        s.setUserInfo(InteractiveUserInfo(password, passphrase, confirmHostKey))
+        s.setServerAliveInterval(15_000)
+        s.setServerAliveCountMax(4)
+        try {
+            s.connect(20_000)
+        } catch (e: JSchException) {
+            throw remapConnectError(e)
+        }
         session = s
     }
 
     /* ------------------------------ Terminal ------------------------------ */
 
-    /** Abre el shell una sola vez; llamadas posteriores no hacen nada. */
+    /** Abre el shell una sola vez; si el servidor no da canal `shell`, prueba `exec`. */
     fun openShell(cols: Int, rows: Int) {
         if (shell != null) return
-        val s = session ?: return
-        val ch = s.openChannel("shell") as ChannelShell
-        ch.setPtyType("xterm-256color")
-        ch.setPtySize(cols, rows, 0, 0)
-        val input = ch.inputStream
+        val s = session ?: throw IllegalStateException("sesión SSH no conectada")
+
+        val input: InputStream
+        val ch: Channel = try {
+            openPtyShell(s, cols, rows)
+        } catch (first: Exception) {
+            try {
+                openPtyExec(s, cols, rows)
+            } catch (second: Exception) {
+                throw JSchException(
+                    "El servidor aceptó SSH/SFTP pero no un terminal interactivo " +
+                        "(canal shell/exec denegado). Muchos hostings solo permiten SFTP. " +
+                        "shell=${first.message}; exec=${second.message}",
+                )
+            }
+        }
+        input = ch.inputStream
         shellOut = ch.outputStream
-        ch.connect(10_000)
         shell = ch
 
         Thread {
@@ -122,6 +147,29 @@ class SshConnection(
         }
     }
 
+    private fun openPtyShell(s: Session, cols: Int, rows: Int): ChannelShell {
+        val ch = s.openChannel("shell") as ChannelShell
+        ch.setPtyType("xterm-256color")
+        ch.setPtySize(cols, rows, 0, 0)
+        ch.setEnv("LANG", "en_US.UTF-8")
+        ch.setEnv("TERM", "xterm-256color")
+        ch.connect(12_000)
+        if (!ch.isConnected) throw JSchException("canal shell no conectado")
+        return ch
+    }
+
+    private fun openPtyExec(s: Session, cols: Int, rows: Int): ChannelExec {
+        val ch = s.openChannel("exec") as ChannelExec
+        ch.setPty(true)
+        ch.setPtyType("xterm-256color", cols, rows, 0, 0)
+        ch.setEnv("LANG", "en_US.UTF-8")
+        ch.setEnv("TERM", "xterm-256color")
+        ch.setCommand("exec bash -l || exec sh -l || exec /bin/sh")
+        ch.connect(12_000)
+        if (!ch.isConnected) throw JSchException("canal exec no conectado")
+        return ch
+    }
+
     fun write(data: ByteArray) {
         writer.execute {
             try {
@@ -135,7 +183,10 @@ class SshConnection(
     fun resize(cols: Int, rows: Int) {
         writer.execute {
             try {
-                shell?.setPtySize(cols, rows, 0, 0)
+                when (val ch = shell) {
+                    is ChannelShell -> ch.setPtySize(cols, rows, 0, 0)
+                    is ChannelExec -> ch.setPtySize(cols, rows, 0, 0)
+                }
             } catch (_: Exception) {
             }
         }
@@ -245,5 +296,71 @@ class SshConnection(
             runCatching { session?.disconnect() }
             writer.shutdown()
         }.start()
+    }
+
+    private fun remapConnectError(e: JSchException): JSchException {
+        val msg = e.message.orEmpty()
+        val lower = msg.lowercase()
+        if (lower.contains("auth fail") || lower.contains("auth cancel")) {
+            return JSchException(
+                "Auth fail: usuario, contraseña o clave incorrectos, o el servidor " +
+                    "exige un método que no enviamos. Prueba clave ed25519 o revisa que SSH " +
+                    "esté abierto en el puerto ${host.port} (no confundir con FTPS).",
+                e,
+            )
+        }
+        if (lower.contains("connection refused") || lower.contains("econnrefused")) {
+            return JSchException(
+                "Conexión rechazada en ${host.hostname}:${host.port}. " +
+                    "Ese puerto no habla SSH. FTPS suele ser 21 o 990; SSH es 22.",
+                e,
+            )
+        }
+        if (lower.contains("invalid version") || lower.contains("invalid identification") ||
+            lower.contains("protocol error") || lower.contains("session.connect")
+        ) {
+            return JSchException(
+                "El servidor en ${host.hostname}:${host.port} no habla SSH " +
+                    "(identificación inválida). Si FTPS te funciona ahí, es otro protocolo; " +
+                    "cambia al puerto 22 o activa SSH en el panel del hosting.",
+                e,
+            )
+        }
+        return e
+    }
+
+    companion object {
+        private val FTPS_PORTS = setOf(21, 989, 990)
+    }
+}
+
+/**
+ * UserInfo + keyboard-interactive. OpenSSH moderno suele ofrecer
+ * keyboard-interactive y no password; JSch necesita ambas interfaces.
+ */
+private class InteractiveUserInfo(
+    private val password: String?,
+    private val passphrase: String?,
+    private val confirmHostKey: suspend (String) -> Boolean,
+) : UserInfo, UIKeyboardInteractive {
+    override fun getPassphrase(): String? = passphrase
+    override fun getPassword(): String? = password
+    override fun promptPassword(message: String?): Boolean = !password.isNullOrEmpty()
+    override fun promptPassphrase(message: String?): Boolean = !passphrase.isNullOrEmpty()
+    override fun promptYesNo(message: String?): Boolean =
+        runBlocking { confirmHostKey(message.orEmpty()) }
+
+    override fun showMessage(message: String?) {}
+
+    override fun promptKeyboardInteractive(
+        destination: String?,
+        name: String?,
+        instruction: String?,
+        prompt: Array<out String>?,
+        echo: BooleanArray?,
+    ): Array<String>? {
+        val pw = password ?: return null
+        if (prompt.isNullOrEmpty()) return emptyArray()
+        return Array(prompt.size) { pw }
     }
 }

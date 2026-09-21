@@ -91,7 +91,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 arrancarServicio(host.name)
             } catch (e: Exception) {
                 conn.close()
-                error = friendly(e)
+                error = friendly(e, host)
             } finally {
                 connecting = null
             }
@@ -121,22 +121,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         app.stopService(Intent(app, SshSessionService::class.java).setAction(SshSessionService.ACTION_STOP))
     }
 
-    private fun friendly(e: Exception): String {
+    private fun friendly(e: Exception, host: Host? = null): String {
         val msg = e.message.orEmpty()
+        val port = host?.port ?: 22
         return when {
+            port in setOf(21, 989, 990) || msg.contains("FTP/FTPS") ->
+                "Ese puerto es FTPS/FTP, no SSH. Pon el puerto 22 (o el que tu panel indique para SSH). " +
+                    "FTPS sirve para archivos; el terminal del vídeo necesita un servidor SSH real."
             msg.contains("HostKey has been changed") ->
                 "¡La clave del servidor ha cambiado! Puede ser un ataque de intermediario. " +
                     "Si sabes que el servidor se reinstaló, borra los datos de la app para olvidar la clave anterior."
             msg.contains("Auth fail") || msg.contains("Auth cancel") ->
-                "Usuario, contraseña o clave incorrectos."
+                "Usuario, contraseña o clave incorrectos. Si el panel de archivos (SFTP) entra y el terminal no, " +
+                    "el hosting puede tener SFTP sin shell."
             e is UnknownHostException || msg.contains("UnknownHost") ->
                 "No se encuentra el servidor. Revisa la dirección."
             msg.contains("timeout", ignoreCase = true) ->
-                "El servidor no responde (tiempo agotado)."
-            msg.contains("Connection refused", ignoreCase = true) ->
-                "Conexión rechazada. Revisa el puerto."
+                "El servidor no responde (tiempo agotado). Comprueba que el puerto $port esté abierto a SSH."
+            msg.contains("Connection refused", ignoreCase = true) || msg.contains("rechazada") ->
+                "Conexión rechazada en el puerto $port. SSH no está escuchando ahí."
+            msg.contains("identificación inválida") || msg.contains("invalid identification") ->
+                "Ese puerto no habla el protocolo SSH."
             msg.contains("reject HostKey") || msg.contains("HostKey") ->
                 "Conexión cancelada: clave del servidor no aceptada."
+            msg.contains("terminal interactivo") -> msg
             else -> msg.ifBlank { e.javaClass.simpleName }
         }
     }
