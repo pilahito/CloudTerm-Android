@@ -34,17 +34,32 @@ jobs:
       - name: Nombrar el APK
         run: |
           mkdir -p dist-apk
-          cp app/build/outputs/apk/debug/*.apk dist-apk/CloudTerm-android-debug.apk
+          cp app/build/outputs/apk/debug/*.apk dist-apk/CloudTerm-android-1.2.0.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: CloudTerm-Android-debug
+          name: CloudTerm-Android-1.2.0
           path: dist-apk/*.apk
 
-      - name: Adjuntar a la release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publicar release v1.2.0
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.2.0' }}
+          name: CloudTerm Android 1.2.0
+          body: |
+            ## CloudTerm Android 1.2.0
+
+            APK nativo (Kotlin). Interfaz mint + logo hexagonal.
+
+            - SSH, SFTP, FTP y FTPS
+            - SSH keyboard-interactive + TOTP 2FA (secreto en Keystore)
+            - Editor propio con resaltado token a token
+            - Pixel Agents: narración de cada transferencia
+            - Asistente IA con detector de tarea
+            - Huella: biométrica de la app + fingerprint SSH del host
+            - Sin logs del servidor en público
+
+            Referencia visual: el vídeo de ejemplo del repo de escritorio.
           files: dist-apk/*.apk
           draft: false
           fail_on_unmatched_files: true
