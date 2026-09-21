@@ -85,6 +85,9 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Cerrar sesión")
                         }
                     },
+                    actions = {
+                        TextButton(onClick = { vm.checkForUpdate(silent = false) }) { Text("Actualizar") }
+                    },
                 )
                 ScrollableTabRow(selectedTabIndex = tab, edgePadding = 8.dp) {
                     Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Terminal") })

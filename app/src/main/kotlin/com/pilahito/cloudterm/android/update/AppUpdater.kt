@@ -35,14 +35,7 @@ object AppUpdater {
     }
 
     fun check(current: String): UpdateInfo {
-        val conn = (URL(API).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15_000
-            readTimeout = 15_000
-            setRequestProperty("Accept", "application/vnd.github+json")
-            setRequestProperty("User-Agent", UA)
-        }
-        val body = conn.inputStream.bufferedReader().use { it.readText() }
-        conn.disconnect()
+        val body = getText(API)
         val json = JSONObject(body)
         val tag = json.optString("tag_name").removePrefix("v")
         val title = json.optString("name").ifBlank { "CloudTerm $tag" }
@@ -65,27 +58,23 @@ object AppUpdater {
         val dir = File(app.cacheDir, "updates").apply { mkdirs() }
         val dest = File(dir, "CloudTerm-update.apk")
         if (dest.exists()) dest.delete()
-        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
-            instanceFollowRedirects = true
-            connectTimeout = 20_000
-            readTimeout = 60_000
-            setRequestProperty("User-Agent", UA)
-        }
-        val total = conn.contentLengthLong.coerceAtLeast(0L)
-        conn.inputStream.use { input ->
-            dest.outputStream().use { out ->
-                val buf = ByteArray(64 * 1024)
-                var read = 0L
-                while (true) {
-                    val n = input.read(buf)
-                    if (n <= 0) break
-                    out.write(buf, 0, n)
-                    read += n
-                    if (total > 0) onProgress(((read * 100) / total).toInt().coerceIn(0, 100))
+        open(url).use { conn ->
+            val total = conn.contentLengthLong.coerceAtLeast(0L)
+            conn.inputStream.use { input ->
+                dest.outputStream().use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    var read = 0L
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n <= 0) break
+                        out.write(buf, 0, n)
+                        read += n
+                        if (total > 0) onProgress(((read * 100) / total).toInt().coerceIn(0, 100))
+                    }
                 }
             }
         }
-        conn.disconnect()
+        if (dest.length() < 1024) throw IllegalStateException("La descarga salió vacía")
         return dest
     }
 
@@ -109,6 +98,40 @@ object AppUpdater {
             Uri.parse("package:${app.packageName}"),
         ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         app.startActivity(intent)
+    }
+
+    private fun getText(url: String): String {
+        open(url).use { conn ->
+            return conn.inputStream.bufferedReader().use { it.readText() }
+        }
+    }
+
+    private fun open(start: String): HttpURLConnection {
+        var current = start
+        repeat(8) {
+            val conn = (URL(current).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false
+                connectTimeout = 20_000
+                readTimeout = 60_000
+                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("User-Agent", UA)
+            }
+            val code = conn.responseCode
+            if (code in 300..399) {
+                val next = conn.getHeaderField("Location")
+                conn.disconnect()
+                if (next.isNullOrBlank()) throw IllegalStateException("Redirección sin destino")
+                current = if (next.startsWith("http")) next else URL(URL(current), next).toString()
+                return@repeat
+            }
+            if (code !in 200..299) {
+                val err = runCatching { conn.errorStream?.bufferedReader()?.readText() }.getOrNull()
+                conn.disconnect()
+                throw IllegalStateException("GitHub $code ${err?.take(120) ?: ""}".trim())
+            }
+            return conn
+        }
+        throw IllegalStateException("Demasiadas redirecciones al bajar el APK")
     }
 
     private fun isNewer(remote: String, local: String): Boolean {
