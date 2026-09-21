@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pilahito.cloudterm.android.ActiveSession
+import com.pilahito.cloudterm.android.net.isEditableCode
 import com.pilahito.cloudterm.android.ssh.RemoteFile
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -102,7 +103,13 @@ fun FilesPane(session: ActiveSession, modifier: Modifier = Modifier) {
             items(session.entries, key = { it.path }) { file ->
                 FileRow(
                     file = file,
-                    onClick = { if (file.isDir) session.open(file.path) else selected = file },
+                    onClick = {
+                        when {
+                            file.isDir -> session.open(file.path)
+                            isEditableCode(file.name) -> session.openEditor(file)
+                            else -> selected = file
+                        }
+                    },
                     onMenu = { selected = file },
                 )
             }
@@ -123,6 +130,12 @@ fun FilesPane(session: ActiveSession, modifier: Modifier = Modifier) {
             title = { Text(file.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
             text = {
                 Column {
+                    if (!file.isDir && isEditableCode(file.name)) {
+                        TextButton(onClick = {
+                            session.openEditor(file)
+                            selected = null
+                        }) { Text("Editar código") }
+                    }
                     if (!file.isDir) {
                         TextButton(onClick = {
                             pendingDownload = file
@@ -178,7 +191,7 @@ private fun FileRow(file: RemoteFile, onClick: () -> Unit, onMenu: () -> Unit) {
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(if (file.isDir) "📁" else "📄")
+        Text(if (file.isDir) "📁" else if (isEditableCode(file.name)) "📝" else "📄")
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(file.name, maxLines = 1, overflow = TextOverflow.Ellipsis)

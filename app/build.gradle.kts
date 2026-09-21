@@ -12,8 +12,8 @@ android {
         applicationId = "com.pilahito.cloudterm.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.0"
+        versionCode = 3
+        versionName = "1.1.0"
     }
 
     buildTypes {
@@ -58,7 +58,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
-    // SSH / SFTP (fork mantenido de JSch). ed25519 en Android 8+ necesita BouncyCastle.
     implementation("com.github.mwiede:jsch:0.2.20")
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
+    implementation("commons-net:commons-net:3.11.1")
 }
