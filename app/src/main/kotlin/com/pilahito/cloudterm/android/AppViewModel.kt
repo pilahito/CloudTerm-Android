@@ -13,6 +13,7 @@ import com.pilahito.cloudterm.android.data.AiSettings
 import com.pilahito.cloudterm.android.data.AuthType
 import com.pilahito.cloudterm.android.data.Host
 import com.pilahito.cloudterm.android.data.HostStore
+import com.pilahito.cloudterm.android.data.LockSettings
 import com.pilahito.cloudterm.android.data.Protocol
 import com.pilahito.cloudterm.android.data.SecretVault
 import com.pilahito.cloudterm.android.ftp.FtpConnection
@@ -29,6 +30,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val store = HostStore(app)
     private val vault = SecretVault(app)
     private val aiStore = AiSettings(app)
+    private val lock = LockSettings(app)
 
     var hosts by mutableStateOf(store.load())
         private set
@@ -41,8 +43,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var error by mutableStateOf<String?>(null)
     var aiAssignments by mutableStateOf(aiStore.assignments)
         private set
+    var biometricEnabled by mutableStateOf(lock.biometricEnabled)
+        private set
+
+    fun setBiometric(enabled: Boolean) {
+        lock.biometricEnabled = enabled
+        biometricEnabled = enabled
+    }
 
     fun hasKey(hostId: String): Boolean = vault.has("key:$hostId")
+    fun hasTotp(hostId: String): Boolean = vault.has("totp:$hostId")
 
     fun assignModel(task: AiTask, modelId: String) {
         val next = aiAssignments.toMutableMap()
@@ -51,7 +61,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         aiStore.save(assignments = next)
     }
 
-    fun saveHost(host: Host, password: String, keyText: String?, passphrase: String) {
+    fun saveHost(host: Host, password: String, keyText: String?, passphrase: String, totpSecret: String) {
         hosts = if (hosts.any { it.id == host.id }) {
             hosts.map { if (it.id == host.id) host else it }
         } else {
@@ -72,6 +82,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (passphrase.isNotEmpty()) vault.put("pass:${host.id}", passphrase)
             vault.remove("pw:${host.id}")
         }
+        if (totpSecret.isNotBlank()) vault.put("totp:${host.id}", totpSecret.replace(" ", ""))
+        if (!host.totpEnabled) vault.remove("totp:${host.id}")
     }
 
     fun deleteHost(host: Host) {
@@ -80,6 +92,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         vault.remove("pw:${host.id}")
         vault.remove("key:${host.id}")
         vault.remove("pass:${host.id}")
+        vault.remove("totp:${host.id}")
     }
 
     fun connect(host: Host) {
@@ -93,6 +106,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 privateKey = vault.get("key:${host.id}"),
                 passphrase = vault.get("pass:${host.id}"),
                 knownHosts = File(getApplication<Application>().filesDir, "known_hosts"),
+                totpSecret = vault.get("totp:${host.id}"),
             ) { message ->
                 val decision = CompletableDeferred<Boolean>()
                 hostKeyRequest = HostKeyRequest(message, decision)
@@ -150,9 +164,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             port in setOf(21, 989, 990) || msg.contains("FTP/FTPS") ->
                 "Ese puerto es FTPS/FTP. Cambia el protocolo del servidor a FTP o FTPS."
             msg.contains("HostKey has been changed") ->
-                "¡La clave del servidor ha cambiado! Si se reinstaló, borra los datos de la app."
+                "La huella del servidor ha cambiado. Si lo reinstalaste, borra los datos de la app."
             msg.contains("Auth fail") || msg.contains("Auth cancel") ->
-                "Usuario, contraseña o clave incorrectos."
+                "Usuario, contraseña, clave o 2FA incorrectos."
             e is UnknownHostException || msg.contains("UnknownHost") ->
                 "No se encuentra el servidor. Revisa la dirección."
             msg.contains("timeout", ignoreCase = true) ->
@@ -162,7 +176,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             msg.contains("identificación inválida") || msg.contains("invalid identification") ->
                 "Ese puerto no habla el protocolo SSH."
             msg.contains("reject HostKey") || msg.contains("HostKey") ->
-                "Conexión cancelada: clave del servidor no aceptada."
+                "Conexión cancelada: huella del servidor no aceptada."
             else -> msg.ifBlank { e.javaClass.simpleName }
         }
     }
