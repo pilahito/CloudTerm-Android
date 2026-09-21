@@ -11,11 +11,14 @@ import com.jcraft.jsch.SftpProgressMonitor
 import com.jcraft.jsch.UIKeyboardInteractive
 import com.jcraft.jsch.UserInfo
 import com.pilahito.cloudterm.android.data.Host
+import com.pilahito.cloudterm.android.net.RemoteFs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -39,16 +42,6 @@ fun parentPath(path: String): String {
     return if (i <= 0) "/" else t.substring(0, i)
 }
 
-/**
- * Una conexión SSH con un canal de shell (terminal) y un canal SFTP (archivos).
- * La clave del servidor se verifica contra un known_hosts propio: la primera vez
- * se pregunta al usuario y, si después cambia, la conexión se rechaza.
- *
- * Importante: muchos OpenSSH desactivan `password` y solo aceptan
- * `keyboard-interactive`. Sin UIKeyboardInteractive JSch falla con Auth fail
- * aunque la contraseña sea correcta. SFTP puede funcionar en el mismo servidor
- * si el hosting expone un daemon distinto (o FTPS en 21/990), de ahí la confusión.
- */
 class SshConnection(
     private val host: Host,
     private val password: String?,
@@ -56,7 +49,7 @@ class SshConnection(
     private val passphrase: String?,
     private val knownHosts: File,
     private val confirmHostKey: suspend (String) -> Boolean,
-) {
+) : RemoteFs {
     private var session: Session? = null
     private var shell: Channel? = null
     private var shellOut: OutputStream? = null
@@ -64,18 +57,19 @@ class SshConnection(
     private val sftpLock = Mutex()
     private val writer = Executors.newSingleThreadExecutor()
 
-    @Volatile
-    var outputSink: ((ByteArray) -> Unit)? = null
+    override val hasTerminal: Boolean = true
 
     @Volatile
-    var onShellClosed: (() -> Unit)? = null
+    override var outputSink: ((ByteArray) -> Unit)? = null
 
-    suspend fun connect() = withContext(Dispatchers.IO) {
+    @Volatile
+    override var onShellClosed: (() -> Unit)? = null
+
+    override suspend fun connect() = withContext(Dispatchers.IO) {
         if (host.port in FTPS_PORTS) {
             throw JSchException(
                 "El puerto ${host.port} es de FTP/FTPS, no de SSH. " +
-                    "SSH usa el puerto 22 (a veces 2222). FTPS y SSH no son el mismo protocolo: " +
-                    "si tu hosting solo da FTPS, el terminal no puede existir.",
+                    "Elige el protocolo FTP o FTPS en el servidor, o usa el puerto 22 para SSH.",
             )
         }
 
@@ -105,10 +99,7 @@ class SshConnection(
         session = s
     }
 
-    /* ------------------------------ Terminal ------------------------------ */
-
-    /** Abre el shell una sola vez; si el servidor no da canal `shell`, prueba `exec`. */
-    fun openShell(cols: Int, rows: Int) {
+    override fun openShell(cols: Int, rows: Int) {
         if (shell != null) return
         val s = session ?: throw IllegalStateException("sesión SSH no conectada")
 
@@ -170,7 +161,7 @@ class SshConnection(
         return ch
     }
 
-    fun write(data: ByteArray) {
+    override fun write(data: ByteArray) {
         writer.execute {
             try {
                 shellOut?.write(data)
@@ -180,7 +171,7 @@ class SshConnection(
         }
     }
 
-    fun resize(cols: Int, rows: Int) {
+    override fun resize(cols: Int, rows: Int) {
         writer.execute {
             try {
                 when (val ch = shell) {
@@ -192,8 +183,6 @@ class SshConnection(
         }
     }
 
-    /* -------------------------------- SFTP -------------------------------- */
-
     private fun channel(): ChannelSftp {
         val existing = sftp
         if (existing != null && existing.isConnected) return existing
@@ -203,11 +192,11 @@ class SshConnection(
         return ch
     }
 
-    suspend fun home(): String = sftpLock.withLock {
+    override suspend fun home(): String = sftpLock.withLock {
         withContext(Dispatchers.IO) { channel().pwd() }
     }
 
-    suspend fun list(dir: String): List<RemoteFile> = sftpLock.withLock {
+    override suspend fun list(dir: String): List<RemoteFile> = sftpLock.withLock {
         withContext(Dispatchers.IO) {
             val ch = channel()
             ch.ls(dir)
@@ -230,7 +219,7 @@ class SshConnection(
         }
     }
 
-    suspend fun download(remote: String, out: OutputStream, onBytes: (Long) -> Unit) =
+    override suspend fun download(remote: String, out: OutputStream, onBytes: (Long) -> Unit) =
         sftpLock.withLock {
             withContext(Dispatchers.IO) {
                 var total = 0L
@@ -241,13 +230,12 @@ class SshConnection(
                         onBytes(total)
                         return true
                     }
-
                     override fun end() {}
                 })
             }
         }
 
-    suspend fun upload(input: InputStream, remote: String, onBytes: (Long) -> Unit) =
+    override suspend fun upload(input: InputStream, remote: String, onBytes: (Long) -> Unit) =
         sftpLock.withLock {
             withContext(Dispatchers.IO) {
                 var total = 0L
@@ -258,21 +246,20 @@ class SshConnection(
                         onBytes(total)
                         return true
                     }
-
                     override fun end() {}
                 }, ChannelSftp.OVERWRITE)
             }
         }
 
-    suspend fun mkdir(path: String) = sftpLock.withLock {
+    override suspend fun mkdir(path: String) = sftpLock.withLock {
         withContext(Dispatchers.IO) { channel().mkdir(path) }
     }
 
-    suspend fun rename(from: String, to: String) = sftpLock.withLock {
+    override suspend fun rename(from: String, to: String) = sftpLock.withLock {
         withContext(Dispatchers.IO) { channel().rename(from, to) }
     }
 
-    suspend fun delete(file: RemoteFile) = sftpLock.withLock {
+    override suspend fun delete(file: RemoteFile) = sftpLock.withLock {
         withContext(Dispatchers.IO) { deleteRecursive(channel(), file.path, file.isDir) }
     }
 
@@ -289,7 +276,26 @@ class SshConnection(
         }
     }
 
-    fun close() {
+    override suspend fun readText(path: String, maxBytes: Long): String = sftpLock.withLock {
+        withContext(Dispatchers.IO) {
+            val attrs = channel().stat(path)
+            if (attrs.getSize() > maxBytes) {
+                throw IllegalStateException("El archivo pesa ${attrs.getSize()} bytes (máximo $maxBytes)")
+            }
+            val buf = ByteArrayOutputStream()
+            channel().get(path, buf)
+            buf.toString(Charsets.UTF_8.name())
+        }
+    }
+
+    override suspend fun writeText(path: String, text: String) = sftpLock.withLock {
+        withContext(Dispatchers.IO) {
+            val bytes = text.toByteArray(Charsets.UTF_8)
+            channel().put(ByteArrayInputStream(bytes), path, ChannelSftp.OVERWRITE)
+        }
+    }
+
+    override fun close() {
         Thread {
             runCatching { shell?.disconnect() }
             runCatching { sftp?.disconnect() }
@@ -312,7 +318,7 @@ class SshConnection(
         if (lower.contains("connection refused") || lower.contains("econnrefused")) {
             return JSchException(
                 "Conexión rechazada en ${host.hostname}:${host.port}. " +
-                    "Ese puerto no habla SSH. FTPS suele ser 21 o 990; SSH es 22.",
+                    "Ese puerto no habla SSH. Usa el protocolo FTP/FTPS o el puerto 22.",
                 e,
             )
         }
@@ -320,9 +326,8 @@ class SshConnection(
             lower.contains("protocol error") || lower.contains("session.connect")
         ) {
             return JSchException(
-                "El servidor en ${host.hostname}:${host.port} no habla SSH " +
-                    "(identificación inválida). Si FTPS te funciona ahí, es otro protocolo; " +
-                    "cambia al puerto 22 o activa SSH en el panel del hosting.",
+                "El servidor en ${host.hostname}:${host.port} no habla SSH. " +
+                    "Si FTPS te funciona ahí, crea el servidor con protocolo FTPS.",
                 e,
             )
         }
@@ -334,10 +339,6 @@ class SshConnection(
     }
 }
 
-/**
- * UserInfo + keyboard-interactive. OpenSSH moderno suele ofrecer
- * keyboard-interactive y no password; JSch necesita ambas interfaces.
- */
 private class InteractiveUserInfo(
     private val password: String?,
     private val passphrase: String?,
