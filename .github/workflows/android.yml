@@ -37,42 +37,30 @@ jobs:
       - name: Nombrar y comprobar firma
         run: |
           mkdir -p dist-apk
-          cp app/build/outputs/apk/release/*.apk dist-apk/CloudTerm-android-1.3.3.apk
-          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --verbose dist-apk/CloudTerm-android-1.3.3.apk
+          cp app/build/outputs/apk/release/*.apk dist-apk/CloudTerm-android-1.3.4.apk
+          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --verbose dist-apk/CloudTerm-android-1.3.4.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: CloudTerm-Android-1.3.3
+          name: CloudTerm-Android-1.3.4
           path: dist-apk/*.apk
 
-      - name: Publicar release v1.3.3
+      - name: Publicar release v1.3.4
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.3.3' }}
-          name: CloudTerm Android 1.3.3
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.3.4' }}
+          name: CloudTerm Android 1.3.4
           body: |
-            ## CloudTerm Android 1.3.3
+            ## CloudTerm Android 1.3.4
 
-            APK de release, firmado (v1 + v2 + v3).
-            Paquete: `com.pilahito.cloudterm.mobile`
+            APK firmado. Paquete `com.pilahito.cloudterm.mobile`.
 
-            **Descarga:** [CloudTerm-android-1.3.3.apk](https://github.com/pilahito/CloudTerm-Android/releases/download/v1.3.3/CloudTerm-android-1.3.3.apk)
+            **Nuevo:** actualizar desde la app (botón Actualizar).
+            Mira GitHub Releases, descarga el APK e instala.
 
-            ### Instalar en el teléfono
-            1. Si tienes el 1.2.0 u otra CloudTerm vieja: Ajustes → Apps → Desinstalar.
-            2. En Archivos o Chrome: permitir apps desconocidas.
-            3. Abre este APK. No uses el 1.2.0 (era debug y Samsung lo rechaza).
+            [CloudTerm-android-1.3.4.apk](https://github.com/pilahito/CloudTerm-Android/releases/download/v1.3.4/CloudTerm-android-1.3.4.apk)
 
-            ### Qué incluye
-            - SSH, SFTP, FTP y FTPS
-            - Terminal xterm.js (SSH)
-            - Editor propio con resaltado token a token
-            - Pixel Agents (narra cada transferencia)
-            - Asistente IA con detector de tarea
-            - 2FA TOTP + huella de la app y del host SSH
-            - Credenciales en Android Keystore. Sin logs del servidor en público.
-
-            Escritorio (exe / deb / AppImage): https://github.com/pilahito/CloudTerm/releases/tag/v1.0.5
+            La primera vez Samsung pide «Permitir de esta fuente» para CloudTerm.
           files: dist-apk/*.apk
           draft: false
           fail_on_unmatched_files: true
