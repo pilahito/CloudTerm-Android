@@ -97,6 +97,7 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
                     )
                     Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("IA") })
                     Tab(selected = tab == 4, onClick = { tab = 4; hideKeyboard() }, text = { Text("VS") })
+                    Tab(selected = tab == 5, onClick = { tab = 5; hideKeyboard() }, text = { Text("Plugins") })
                 }
             }
         },
@@ -127,6 +128,9 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
             }
             if (tab == 4) {
                 VsCodroidPane(session.host, Modifier.fillMaxSize())
+            }
+            if (tab == 5) {
+                PluginsPane(Modifier.fillMaxSize())
             }
             session.transfer?.let { t ->
                 TransferHud(t, Modifier.align(Alignment.BottomCenter))
