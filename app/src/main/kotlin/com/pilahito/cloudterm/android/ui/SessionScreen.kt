@@ -95,6 +95,7 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
                         text = { Text(if (session.editorDirty) "Código·" else "Código") },
                     )
                     Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("IA") })
+                    Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Agents") })
                 }
             }
         },
@@ -122,6 +123,9 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
                     fileBody = session.editorText.ifBlank { null },
                     modifier = Modifier.fillMaxSize(),
                 )
+            }
+            if (tab == 4) {
+                PixelAgentsPane(session, Modifier.fillMaxSize())
             }
         }
     }

@@ -24,6 +24,7 @@ class HostStore(context: Context) {
                         .getOrDefault(AuthType.PASSWORD),
                     protocol = runCatching { Protocol.valueOf(o.optString("protocol", "SSH")) }
                         .getOrDefault(Protocol.SSH),
+                    totpEnabled = o.optBoolean("totp", false),
                 )
             }
         } catch (_: Exception) {
@@ -42,7 +43,8 @@ class HostStore(context: Context) {
                     .put("port", h.port)
                     .put("username", h.username)
                     .put("auth", h.authType.name)
-                    .put("protocol", h.protocol.name),
+                    .put("protocol", h.protocol.name)
+                    .put("totp", h.totpEnabled),
             )
         }
         file.writeText(arr.toString())

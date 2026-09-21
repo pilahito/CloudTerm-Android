@@ -58,7 +58,16 @@ fun HostsScreen(vm: AppViewModel) {
     var deleting by remember { mutableStateOf<Host?>(null) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("CloudTerm") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("CloudTerm") },
+                actions = {
+                    TextButton(onClick = { vm.setBiometric(!vm.biometricEnabled) }) {
+                        Text(if (vm.biometricEnabled) "Huella ON" else "Huella OFF")
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = { creating = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Añadir servidor")
@@ -110,9 +119,10 @@ fun HostsScreen(vm: AppViewModel) {
         HostDialog(
             initial = initial,
             hasKey = initial != null && vm.hasKey(initial.id),
+            hasTotp = initial != null && vm.hasTotp(initial.id),
             onDismiss = { creating = false; editing = null },
-            onSave = { host, password, key, passphrase ->
-                vm.saveHost(host, password, key, passphrase)
+            onSave = { host, password, key, passphrase, totp ->
+                vm.saveHost(host, password, key, passphrase, totp)
                 creating = false
                 editing = null
             },
@@ -136,8 +146,9 @@ fun HostsScreen(vm: AppViewModel) {
 private fun HostDialog(
     initial: Host?,
     hasKey: Boolean,
+    hasTotp: Boolean,
     onDismiss: () -> Unit,
-    onSave: (Host, String, String?, String) -> Unit,
+    onSave: (Host, String, String?, String, String) -> Unit,
 ) {
     val ctx = LocalContext.current
     var name by remember { mutableStateOf(initial?.name ?: "") }
@@ -149,10 +160,10 @@ private fun HostDialog(
     var password by remember { mutableStateOf("") }
     var passphrase by remember { mutableStateOf("") }
     var keyText by remember { mutableStateOf<String?>(null) }
-
+    var totpOn by remember { mutableStateOf(initial?.totpEnabled ?: false) }
+    var totpSecret by remember { mutableStateOf("") }
     val ftpLike = protocol == Protocol.FTP || protocol == Protocol.FTPS
     if (ftpLike && auth != AuthType.PASSWORD) auth = AuthType.PASSWORD
-
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
             keyText = runCatching {
@@ -160,95 +171,47 @@ private fun HostDialog(
             }.getOrNull()
         }
     }
-
     val keyOk = auth == AuthType.PASSWORD || keyText != null || hasKey
-    val valid = hostname.isNotBlank() && user.isNotBlank() &&
-        (port.toIntOrNull() ?: 0) in 1..65535 && keyOk
-
+    val valid = hostname.isNotBlank() && user.isNotBlank() && (port.toIntOrNull() ?: 0) in 1..65535 && keyOk
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (initial == null) "Nuevo servidor" else "Editar servidor") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(name, { name = it }, label = { Text("Nombre") }, singleLine = true)
-                OutlinedTextField(
-                    hostname, { hostname = it },
-                    label = { Text("Dirección") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                )
+                OutlinedTextField(hostname, { hostname = it }, label = { Text("Dirección") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
                 Text("Protocolo", style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Protocol.entries.forEach { p ->
-                        FilterChip(
-                            selected = protocol == p,
-                            onClick = {
-                                protocol = p
-                                port = p.defaultPort.toString()
-                            },
-                            label = { Text(p.label) },
-                        )
+                        FilterChip(selected = protocol == p, onClick = { protocol = p; port = p.defaultPort.toString() }, label = { Text(p.label) })
                     }
                 }
-                OutlinedTextField(
-                    port, { port = it.filter(Char::isDigit) },
-                    label = { Text("Puerto") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
+                OutlinedTextField(port, { port = it.filter(Char::isDigit) }, label = { Text("Puerto") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 OutlinedTextField(user, { user = it }, label = { Text("Usuario") }, singleLine = true)
-
                 if (!ftpLike) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = auth == AuthType.PASSWORD,
-                            onClick = { auth = AuthType.PASSWORD },
-                            label = { Text("Contraseña") },
-                        )
-                        FilterChip(
-                            selected = auth == AuthType.KEY,
-                            onClick = { auth = AuthType.KEY },
-                            label = { Text("Clave privada") },
-                        )
+                        FilterChip(selected = auth == AuthType.PASSWORD, onClick = { auth = AuthType.PASSWORD }, label = { Text("Contraseña") })
+                        FilterChip(selected = auth == AuthType.KEY, onClick = { auth = AuthType.KEY }, label = { Text("Clave privada") })
                     }
                 }
-
                 if (auth == AuthType.PASSWORD || ftpLike) {
-                    OutlinedTextField(
-                        password, { password = it },
-                        label = { Text(if (initial != null) "Contraseña (vacío = no cambiar)" else "Contraseña") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    )
+                    OutlinedTextField(password, { password = it }, label = { Text(if (initial != null) "Contraseña (vacío = no cambiar)" else "Contraseña") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
                 } else {
-                    OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }) {
-                        Text(if (keyText != null || hasKey) "Clave cargada ✓ (cambiar)" else "Elegir archivo de clave")
-                    }
-                    OutlinedTextField(
-                        passphrase, { passphrase = it },
-                        label = { Text("Passphrase (si la tiene)") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    )
+                    OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }) { Text(if (keyText != null || hasKey) "Clave cargada" else "Elegir archivo de clave") }
+                    OutlinedTextField(passphrase, { passphrase = it }, label = { Text("Passphrase") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                }
+                FilterChip(selected = totpOn, onClick = { totpOn = !totpOn }, label = { Text("2FA TOTP") })
+                if (totpOn) {
+                    OutlinedTextField(totpSecret, { totpSecret = it }, label = { Text(if (hasTotp) "Secreto TOTP (vacío = no cambiar)" else "Secreto TOTP base32") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
                 }
             }
         },
         confirmButton = {
-            TextButton(
-                enabled = valid,
-                onClick = {
-                    val base = initial ?: Host(name = "", hostname = "", username = "")
-                    val host = base.copy(
-                        name = name.ifBlank { hostname.trim() },
-                        hostname = hostname.trim(),
-                        port = port.toInt(),
-                        username = user.trim(),
-                        authType = if (ftpLike) AuthType.PASSWORD else auth,
-                        protocol = protocol,
-                    )
-                    onSave(host, password, keyText, passphrase)
-                },
-            ) { Text("Guardar") }
+            TextButton(enabled = valid, onClick = {
+                val base = initial ?: Host(name = "", hostname = "", username = "")
+                val host = base.copy(name = name.ifBlank { hostname.trim() }, hostname = hostname.trim(), port = port.toInt(), username = user.trim(), authType = if (ftpLike) AuthType.PASSWORD else auth, protocol = protocol, totpEnabled = totpOn)
+                onSave(host, password, keyText, passphrase, totpSecret)
+            }) { Text("Guardar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )

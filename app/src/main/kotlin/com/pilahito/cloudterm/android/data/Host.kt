@@ -38,4 +38,5 @@ data class Host(
     val username: String,
     val authType: AuthType = AuthType.PASSWORD,
     val protocol: Protocol = Protocol.SSH,
+    val totpEnabled: Boolean = false,
 )

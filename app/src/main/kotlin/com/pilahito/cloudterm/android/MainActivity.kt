@@ -5,8 +5,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
-import androidx.core.app.ActivityCompat
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Row
@@ -19,14 +17,22 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
+import androidx.fragment.app.FragmentActivity
+import com.pilahito.cloudterm.android.auth.HostFingerprint
 import com.pilahito.cloudterm.android.ui.CloudTermTheme
 import com.pilahito.cloudterm.android.ui.HostsScreen
+import com.pilahito.cloudterm.android.ui.LockScreen
 import com.pilahito.cloudterm.android.ui.SessionScreen
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private val vm: AppViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,6 +53,12 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun App(vm: AppViewModel) {
+    var unlocked by rememberSaveable { mutableStateOf(!vm.biometricEnabled) }
+    if (vm.biometricEnabled && !unlocked) {
+        LockScreen(onUnlocked = { unlocked = true })
+        return
+    }
+
     val s = vm.session
     if (s == null) HostsScreen(vm) else SessionScreen(vm, s)
 
@@ -67,13 +79,21 @@ private fun App(vm: AppViewModel) {
     }
 
     vm.hostKeyRequest?.let { request ->
+        val fp = HostFingerprint.extract(request.message)
         AlertDialog(
             onDismissRequest = { vm.answerHostKey(false) },
-            title = { Text("Servidor desconocido") },
+            title = { Text("Detector de huella SSH") },
             text = {
                 Text(
-                    request.message +
-                        "\n\nComprueba que la huella coincide con la de tu servidor antes de continuar.",
+                    buildString {
+                        append("Comprueba la huella del servidor antes de confiar.\n\n")
+                        if (fp != null) {
+                            append("Huella detectada:\n")
+                            append(fp)
+                            append("\n\n")
+                        }
+                        append("No se publica ni se sube. Solo se guarda en este teléfono si aceptas.")
+                    },
                     modifier = Modifier.padding(top = 4.dp),
                 )
             },
