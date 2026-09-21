@@ -1,35 +1,45 @@
 # CloudTerm Android
 
-Cliente nativo para Android (Kotlin + Jetpack Compose) con la identidad visual
-de [CloudTerm](https://github.com/pilahito/CloudTerm) de escritorio.
+Cliente nativo (Kotlin + Jetpack Compose) con la misma identidad visual que
+[CloudTerm de escritorio](https://github.com/pilahito/CloudTerm).
 
-Protocolos: **SSH**, **SFTP**, **FTP** y **FTPS**. Editor de código remoto.
+**SSH · SFTP · FTP · FTPS** · editor propio · Pixel Agents · asistente IA
 
-## Instalar el APK
+## Descargar
 
-Descarga **1.3.2** (no uses 1.2.0):
-https://github.com/pilahito/CloudTerm-Android/releases/tag/v1.3.2
+| Archivo | Notas |
+| --- | --- |
+| [CloudTerm-android-1.3.3.apk](https://github.com/pilahito/CloudTerm-Android/releases/download/v1.3.3/CloudTerm-android-1.3.3.apk) | Release firmado. Android 8+ |
+| [Todas las versiones](https://github.com/pilahito/CloudTerm-Android/releases) | No uses el 1.2.0 |
 
-El 1.2.0 era un APK de depuración. Samsung responde "Aplicación no instalada"
-si queda esa versión o si la firma no coincide.
+Paquete: `com.pilahito.cloudterm.mobile`
 
-1. Desinstala CloudTerm anterior si aparece en Ajustes → Apps.
-2. En Archivos o Chrome permite instalar apps desconocidas.
-3. Abre `CloudTerm-android-1.3.2.apk`.
+### Si sale «Aplicación no instalada»
 
-## Compilar
-
-Actions → *APK de Android* → **Run workflow** (rama `main`).
+1. Ajustes → Aplicaciones → CloudTerm → Desinstalar (cualquier versión anterior).
+2. Archivos o Chrome → permitir instalar apps desconocidas.
+3. Instala **1.3.3**. El 1.2.0 era debug y Samsung lo bloquea.
 
 ## Qué incluye
 
-- Protocolo al crear el servidor: SSH (22 + terminal), SFTP (22 archivos),
-  FTP (21) y FTPS (990 implícito / 21 explícito).
-- Terminal xterm.js solo en SSH. FTP/FTPS no tienen shell; usan Archivos y Código.
-- Editor visual: pestaña **Código** con resaltado token a token.
-- **Pixel Agents**: narra cada transferencia.
-- **Asistente IA** con detector de tarea.
-- **2FA TOTP** y **detector de huella** (app + host SSH).
-- Credenciales AES-GCM + Android Keystore. No se publican logs del servidor.
+- **SSH** (puerto 22, terminal xterm.js), **SFTP**, **FTP** (21) y **FTPS** (990 / explícito).
+- Editor en la pestaña Código, resaltado token a token.
+- **Pixel Agents**: mensaje de qué archivo se está moviendo.
+- **IA** con detector de tarea y modelos básicos según el hardware.
+- **2FA TOTP** en keyboard-interactive y **huella** (app + fingerprint SSH).
+- Contraseñas en Android Keystore (AES-GCM). Nada de logs del servidor en el repo.
 
-Versión **1.3.2** (`com.pilahito.cloudterm.mobile`).
+## Compilar
+
+Actions → *APK de Android* → **Run workflow** (`main`).
+
+```bash
+gradle :app:assembleRelease
+```
+
+El keystore de Releases vive en `store/cloudterm.jks.b64`.
+La clave de Google Play, cuando exista, no se sube al repo.
+
+## Escritorio
+
+Windows `.exe`, Linux `.deb` / AppImage: [CloudTerm 1.0.5](https://github.com/pilahito/CloudTerm/releases/tag/v1.0.5)

@@ -9,12 +9,11 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        // Paquete nuevo: el 1.2.0 debug usaba otra firma y Samsung bloqueaba la actualización.
         applicationId = "com.pilahito.cloudterm.mobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.3.2"
+        versionCode = 9
+        versionName = "1.3.3"
     }
 
     signingConfigs {
