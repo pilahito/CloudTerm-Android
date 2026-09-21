@@ -98,22 +98,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun connect(host: Host) {
         if (connecting != null || session != null) return
         connecting = host
-        val conn: RemoteFs = when (host.protocol) {
-            Protocol.FTP, Protocol.FTPS -> FtpConnection(host, vault.get("pw:${host.id}"))
-            Protocol.SSH, Protocol.SFTP -> SshConnection(
-                host = host,
-                password = vault.get("pw:${host.id}"),
-                privateKey = vault.get("key:${host.id}"),
-                passphrase = vault.get("pass:${host.id}"),
-                knownHosts = File(getApplication<Application>().filesDir, "known_hosts"),
-                totpSecret = vault.get("totp:${host.id}"),
-            ) { message ->
-                val decision = CompletableDeferred<Boolean>()
-                hostKeyRequest = HostKeyRequest(message, decision)
-                decision.await()
-            }
-        }
         viewModelScope.launch {
+            val conn: RemoteFs = when (host.protocol) {
+                Protocol.FTP, Protocol.FTPS -> FtpConnection(host, vault.get("pw:${host.id}"))
+                Protocol.SSH, Protocol.SFTP -> SshConnection(
+                    host = host,
+                    password = vault.get("pw:${host.id}"),
+                    privateKey = vault.get("key:${host.id}"),
+                    passphrase = vault.get("pass:${host.id}"),
+                    knownHosts = File(getApplication<Application>().filesDir, "known_hosts"),
+                    totpSecret = vault.get("totp:${host.id}"),
+                ) { message ->
+                    val decision = CompletableDeferred<Boolean>()
+                    hostKeyRequest = HostKeyRequest(message, decision)
+                    decision.await()
+                }
+            }
             try {
                 conn.connect()
                 session = ActiveSession(

@@ -19,6 +19,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
+import java.time.Duration
 import javax.net.ssl.SSLContext
 import javax.net.ssl.X509TrustManager
 
@@ -55,7 +56,7 @@ class FtpConnection(
         }
         c.connectTimeout = 20_000
         c.defaultTimeout = 20_000
-        c.dataTimeout = 30_000
+        c.setDataTimeout(Duration.ofMillis(30_000))
         c.controlEncoding = "UTF-8"
         c.connect(host.hostname, host.port)
         val hello = c.replyCode
