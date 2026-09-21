@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -112,6 +114,53 @@ private fun App(vm: AppViewModel) {
             title = { Text("No se pudo conectar") },
             text = { Text(message) },
             confirmButton = { TextButton(onClick = { vm.error = null }) { Text("Aceptar") } },
+        )
+    }
+
+    val busy = vm.updateBusy
+    if (busy != null) {
+        AlertDialog(
+            onDismissRequest = {},
+            confirmButton = {},
+            title = { Text("Actualización") },
+            text = {
+                Column {
+                    Text(busy)
+                    if (vm.updateProgress in 0..100) {
+                        LinearProgressIndicator(
+                            progress = { vm.updateProgress / 100f },
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
+                        Text("${vm.updateProgress} %", modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+            },
+        )
+    }
+
+    val info = vm.update
+    if (busy == null && info != null && info.newer) {
+        AlertDialog(
+            onDismissRequest = { vm.dismissUpdate() },
+            title = { Text("Hay una versión nueva") },
+            text = {
+                Text("Instalada: ${vm.installedVersion}\nNueva: ${info.tag}\n\n${info.notes}")
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.downloadAndInstall() }) { Text("Descargar e instalar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.dismissUpdate() }) { Text("Ahora no") }
+            },
+        )
+    }
+
+    vm.updateNotice?.let { message ->
+        AlertDialog(
+            onDismissRequest = { vm.updateNotice = null },
+            title = { Text("Actualizar") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = { vm.updateNotice = null }) { Text("Aceptar") } },
         )
     }
 }

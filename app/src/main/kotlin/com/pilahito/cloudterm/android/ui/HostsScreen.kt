@@ -62,6 +62,9 @@ fun HostsScreen(vm: AppViewModel) {
             TopAppBar(
                 title = { Text("CloudTerm") },
                 actions = {
+                    TextButton(onClick = { vm.checkForUpdate(silent = false) }) {
+                        Text("Actualizar")
+                    }
                     TextButton(onClick = { vm.setBiometric(!vm.biometricEnabled) }) {
                         Text(if (vm.biometricEnabled) "Huella ON" else "Huella OFF")
                     }
