@@ -10,6 +10,7 @@ import com.jcraft.jsch.Session
 import com.jcraft.jsch.SftpProgressMonitor
 import com.jcraft.jsch.UIKeyboardInteractive
 import com.jcraft.jsch.UserInfo
+import com.pilahito.cloudterm.android.auth.Totp
 import com.pilahito.cloudterm.android.data.Host
 import com.pilahito.cloudterm.android.net.RemoteFs
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +49,7 @@ class SshConnection(
     private val privateKey: String?,
     private val passphrase: String?,
     private val knownHosts: File,
+    private val totpSecret: String? = null,
     private val confirmHostKey: suspend (String) -> Boolean,
 ) : RemoteFs {
     private var session: Session? = null
@@ -88,7 +90,7 @@ class SshConnection(
         s.setConfig("PreferredAuthentications", "publickey,keyboard-interactive,password")
         s.setConfig("MaxAuthTries", "5")
         s.timeout = 20_000
-        s.setUserInfo(InteractiveUserInfo(password, passphrase, confirmHostKey))
+        s.setUserInfo(InteractiveUserInfo(password, passphrase, totpSecret, confirmHostKey))
         s.setServerAliveInterval(15_000)
         s.setServerAliveCountMax(4)
         try {
@@ -309,7 +311,7 @@ class SshConnection(
         val lower = msg.lowercase()
         if (lower.contains("auth fail") || lower.contains("auth cancel")) {
             return JSchException(
-                "Auth fail: usuario, contraseña o clave incorrectos, o el servidor " +
+                "Auth fail: usuario, contraseña, clave o 2FA incorrectos, o el servidor " +
                     "exige un método que no enviamos. Prueba clave ed25519 o revisa que SSH " +
                     "esté abierto en el puerto ${host.port} (no confundir con FTPS).",
                 e,
@@ -317,7 +319,7 @@ class SshConnection(
         }
         if (lower.contains("connection refused") || lower.contains("econnrefused")) {
             return JSchException(
-                "Conexión rechazada en ${host.hostname}:${host.port}. " +
+                "Conexión rechazada en el puerto ${host.port}. " +
                     "Ese puerto no habla SSH. Usa el protocolo FTP/FTPS o el puerto 22.",
                 e,
             )
@@ -326,7 +328,7 @@ class SshConnection(
             lower.contains("protocol error") || lower.contains("session.connect")
         ) {
             return JSchException(
-                "El servidor en ${host.hostname}:${host.port} no habla SSH. " +
+                "El servidor en el puerto ${host.port} no habla SSH. " +
                     "Si FTPS te funciona ahí, crea el servidor con protocolo FTPS.",
                 e,
             )
@@ -342,6 +344,7 @@ class SshConnection(
 private class InteractiveUserInfo(
     private val password: String?,
     private val passphrase: String?,
+    private val totpSecret: String?,
     private val confirmHostKey: suspend (String) -> Boolean,
 ) : UserInfo, UIKeyboardInteractive {
     override fun getPassphrase(): String? = passphrase
@@ -360,8 +363,16 @@ private class InteractiveUserInfo(
         prompt: Array<out String>?,
         echo: BooleanArray?,
     ): Array<String>? {
-        val pw = password ?: return null
         if (prompt.isNullOrEmpty()) return emptyArray()
-        return Array(prompt.size) { pw }
+        val answers = Array(prompt.size) { i ->
+            val p = prompt[i]
+            if (!totpSecret.isNullOrBlank() && Totp.looksLikeTotpPrompt(p)) {
+                Totp.now(totpSecret)
+            } else {
+                password.orEmpty()
+            }
+        }
+        if (answers.all { it.isEmpty() }) return null
+        return answers
     }
 }
