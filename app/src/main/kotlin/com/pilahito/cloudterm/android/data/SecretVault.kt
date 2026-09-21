@@ -10,11 +10,6 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/**
- * Contraseñas, claves privadas y passphrases cifradas con AES-GCM.
- * La clave AES vive en el Android Keystore y no sale del dispositivo;
- * en disco solo queda el texto cifrado.
- */
 class SecretVault(context: Context) {
     private val prefs = context.getSharedPreferences("secrets", Context.MODE_PRIVATE)
 
@@ -22,7 +17,6 @@ class SecretVault(context: Context) {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val existing = ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry
         if (existing != null) return existing.secretKey
-
         val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         gen.init(
             KeyGenParameterSpec.Builder(
@@ -32,7 +26,7 @@ class SecretVault(context: Context) {
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256)
-                .build()
+                .build(),
         )
         return gen.generateKey()
     }
@@ -53,7 +47,7 @@ class SecretVault(context: Context) {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
             String(cipher.doFinal(blob, IV_SIZE, blob.size - IV_SIZE), Charsets.UTF_8)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -62,6 +56,10 @@ class SecretVault(context: Context) {
 
     fun remove(name: String) {
         prefs.edit().remove(name).apply()
+    }
+
+    fun clearAll() {
+        prefs.edit().clear().apply()
     }
 
     private companion object {

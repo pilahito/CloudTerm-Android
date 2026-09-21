@@ -41,6 +41,47 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var error by mutableStateOf<String?>(null)
     var aiAssignments by mutableStateOf(aiStore.assignments)
         private set
+    var wipedNotice by mutableStateOf<String?>(null)
+
+    init {
+        purgeBannedHosts()
+    }
+
+    private fun looksBanned(host: Host): Boolean {
+        val blob = "${host.name} ${host.hostname} ${host.username}".lowercase()
+        return listOf("solaris", "sunos", "sun-solaris").any { it in blob }
+    }
+
+    fun purgeBannedHosts() {
+        val drop = hosts.filter(::looksBanned)
+        if (drop.isEmpty()) return
+        drop.forEach { h ->
+            vault.remove("pw:${h.id}")
+            vault.remove("key:${h.id}")
+            vault.remove("pass:${h.id}")
+        }
+        hosts = hosts.filterNot(::looksBanned)
+        store.save(hosts)
+        File(getApplication<Application>().filesDir, "known_hosts").delete()
+        wipedNotice = "Se borró el registro SSH de Solaris y sus claves."
+    }
+
+    fun wipeAllPrivate() {
+        disconnect()
+        hosts.forEach { h ->
+            vault.remove("pw:${h.id}")
+            vault.remove("key:${h.id}")
+            vault.remove("pass:${h.id}")
+        }
+        vault.clearAll()
+        hosts = emptyList()
+        store.save(emptyList())
+        val dir = getApplication<Application>().filesDir
+        File(dir, "known_hosts").delete()
+        File(dir, "hosts.json").delete()
+        File(dir, "scratch.kt").delete()
+        wipedNotice = "Servidores, contraseñas, claves y known_hosts borrados."
+    }
 
     fun hasKey(hostId: String): Boolean = vault.has("key:$hostId")
 
@@ -52,13 +93,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun saveHost(host: Host, password: String, keyText: String?, passphrase: String) {
+        if (looksBanned(host)) {
+            error = "Ese host está bloqueado (Solaris). No se guarda."
+            return
+        }
         hosts = if (hosts.any { it.id == host.id }) {
             hosts.map { if (it.id == host.id) host else it }
         } else {
             hosts + host
         }
         store.save(hosts)
-
         if (host.authType == AuthType.PASSWORD || host.protocol == Protocol.FTP || host.protocol == Protocol.FTPS) {
             if (password.isNotEmpty()) vault.put("pw:${host.id}", password)
             if (host.protocol == Protocol.FTP || host.protocol == Protocol.FTPS) {
