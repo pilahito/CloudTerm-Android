@@ -6,6 +6,8 @@ import android.provider.OpenableColumns
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.pilahito.cloudterm.android.agents.AgentEvent
+import com.pilahito.cloudterm.android.agents.PixelAgents
 import com.pilahito.cloudterm.android.data.Host
 import com.pilahito.cloudterm.android.net.RemoteFs
 import com.pilahito.cloudterm.android.ssh.RemoteFile
@@ -30,6 +32,7 @@ class ActiveSession(
     var notice by mutableStateOf<String?>(null)
     var transfer by mutableStateOf<Transfer?>(null)
     var shellClosed by mutableStateOf(false)
+    var agentLog by mutableStateOf<List<AgentEvent>>(emptyList())
 
     var editorPath by mutableStateOf<String?>(null)
     var editorName by mutableStateOf("")
@@ -40,15 +43,21 @@ class ActiveSession(
 
     init {
         conn.onShellClosed = { shellClosed = true }
+        narrate(PixelAgents.GUARD, "Sesión", "Conectado. No se publican registros del servidor.")
+    }
+
+    fun narrate(agent: String, action: String, detail: String) {
+        agentLog = (agentLog + AgentEvent(agent, action, detail)).takeLast(80)
     }
 
     fun startShell(cols: Int, rows: Int, sink: (ByteArray) -> Unit) {
         conn.outputSink = sink
+        narrate(PixelAgents.SHELL, "Terminal", "Abriendo PTY ${cols}x${rows}")
         scope.launch(Dispatchers.IO) {
             try {
                 conn.openShell(cols, rows)
             } catch (e: Exception) {
-                notice = "No se pudo abrir el terminal: ${e.message}"
+                notice = "No se pudo abrir el terminal."
             }
         }
     }
@@ -60,8 +69,9 @@ class ActiveSession(
                 val home = conn.home()
                 entries = conn.list(home)
                 path = home
+                narrate(PixelAgents.TRANSFER, "Listar", "Directorio inicial listo")
             } catch (e: Exception) {
-                notice = "No se pudo listar el directorio: ${e.message}"
+                notice = "No se pudo listar el directorio."
             } finally {
                 loading = false
             }
@@ -75,7 +85,7 @@ class ActiveSession(
                 entries = conn.list(target)
                 path = target
             } catch (e: Exception) {
-                notice = "No se pudo abrir $target: ${e.message}"
+                notice = "No se pudo abrir el directorio."
             } finally {
                 loading = false
             }
@@ -83,15 +93,15 @@ class ActiveSession(
     }
 
     fun up() = open(parentPath(path))
-
     fun refresh() = open(path)
 
     fun mkdir(name: String) {
         scope.launch {
             try {
                 conn.mkdir(joinPath(path, name))
+                narrate(PixelAgents.TRANSFER, "Carpeta", name)
             } catch (e: Exception) {
-                notice = "No se pudo crear la carpeta: ${e.message}"
+                notice = "No se pudo crear la carpeta."
             }
             refresh()
         }
@@ -101,8 +111,9 @@ class ActiveSession(
         scope.launch {
             try {
                 conn.rename(file.path, joinPath(parentPath(file.path), newName))
+                narrate(PixelAgents.TRANSFER, "Renombrar", file.name)
             } catch (e: Exception) {
-                notice = "No se pudo renombrar: ${e.message}"
+                notice = "No se pudo renombrar."
             }
             refresh()
         }
@@ -112,8 +123,9 @@ class ActiveSession(
         scope.launch {
             try {
                 conn.delete(file)
+                narrate(PixelAgents.TRANSFER, "Eliminar", file.name)
             } catch (e: Exception) {
-                notice = "No se pudo eliminar: ${e.message}"
+                notice = "No se pudo eliminar."
             }
             refresh()
         }
@@ -123,13 +135,15 @@ class ActiveSession(
         scope.launch {
             val label = "↓ ${file.name}"
             transfer = Transfer(label, 0, file.size)
+            narrate(PixelAgents.TRANSFER, "Descarga", "Pixel está moviendo ${file.name}")
             try {
                 val out = resolver.openOutputStream(destination)
-                    ?: throw IOException("no se pudo escribir el destino")
+                    ?: throw IOException("destino")
                 out.use { conn.download(file.path, it) { done -> transfer = Transfer(label, done, file.size) } }
                 notice = "Descargado: ${file.name}"
+                narrate(PixelAgents.TRANSFER, "Listo", file.name)
             } catch (e: Exception) {
-                notice = "Error al descargar: ${e.message}"
+                notice = "Error al descargar."
             } finally {
                 transfer = null
             }
@@ -150,14 +164,15 @@ class ActiveSession(
             }
             val label = "↑ $name"
             transfer = Transfer(label, 0, size)
+            narrate(PixelAgents.TRANSFER, "Subida", "Pixel está enviando $name")
             try {
-                val input = resolver.openInputStream(source)
-                    ?: throw IOException("no se pudo leer el archivo")
+                val input = resolver.openInputStream(source) ?: throw IOException("origen")
                 input.use { conn.upload(it, joinPath(path, name)) { done -> transfer = Transfer(label, done, size) } }
                 notice = "Subido: $name"
+                narrate(PixelAgents.TRANSFER, "Listo", name)
                 refresh()
             } catch (e: Exception) {
-                notice = "Error al subir: ${e.message}"
+                notice = "Error al subir."
             } finally {
                 transfer = null
             }
@@ -170,11 +185,12 @@ class ActiveSession(
         editorName = file.name
         editorLoading = true
         editorDirty = false
+        narrate(PixelAgents.EDITOR, "Abrir", file.name)
         scope.launch {
             try {
                 editorText = conn.readText(file.path)
             } catch (e: Exception) {
-                notice = "No se pudo abrir el código: ${e.message}"
+                notice = "No se pudo abrir el código."
                 editorOpen = false
             } finally {
                 editorLoading = false
@@ -190,13 +206,14 @@ class ActiveSession(
     fun saveEditor() {
         val remote = editorPath ?: return
         editorLoading = true
+        narrate(PixelAgents.EDITOR, "Guardar", editorName)
         scope.launch {
             try {
                 conn.writeText(remote, editorText)
                 editorDirty = false
                 notice = "Guardado: $editorName"
             } catch (e: Exception) {
-                notice = "No se pudo guardar: ${e.message}"
+                notice = "No se pudo guardar."
             } finally {
                 editorLoading = false
             }
