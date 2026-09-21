@@ -58,7 +58,8 @@ object AppUpdater {
         val dir = File(app.cacheDir, "updates").apply { mkdirs() }
         val dest = File(dir, "CloudTerm-update.apk")
         if (dest.exists()) dest.delete()
-        open(url).use { conn ->
+        val conn = open(url)
+        try {
             val total = conn.contentLengthLong.coerceAtLeast(0L)
             conn.inputStream.use { input ->
                 dest.outputStream().use { out ->
@@ -73,6 +74,8 @@ object AppUpdater {
                     }
                 }
             }
+        } finally {
+            conn.disconnect()
         }
         if (dest.length() < 1024) throw IllegalStateException("La descarga salió vacía")
         return dest
@@ -101,8 +104,11 @@ object AppUpdater {
     }
 
     private fun getText(url: String): String {
-        open(url).use { conn ->
+        val conn = open(url)
+        try {
             return conn.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            conn.disconnect()
         }
     }
 
@@ -122,14 +128,13 @@ object AppUpdater {
                 conn.disconnect()
                 if (next.isNullOrBlank()) throw IllegalStateException("Redirección sin destino")
                 current = if (next.startsWith("http")) next else URL(URL(current), next).toString()
-                return@repeat
-            }
-            if (code !in 200..299) {
+            } else if (code !in 200..299) {
                 val err = runCatching { conn.errorStream?.bufferedReader()?.readText() }.getOrNull()
                 conn.disconnect()
                 throw IllegalStateException("GitHub $code ${err?.take(120) ?: ""}".trim())
+            } else {
+                return conn
             }
-            return conn
         }
         throw IllegalStateException("Demasiadas redirecciones al bajar el APK")
     }
