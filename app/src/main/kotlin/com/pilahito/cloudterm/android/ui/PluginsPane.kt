@@ -45,7 +45,7 @@ fun PluginsPane(modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     val store = remember { PluginStore(ctx) }
     var plugins by remember { mutableStateOf(store.all()) }
-    var market by remember { mutableStateOf("acode") }
+    var market by remember { mutableStateOf("web") }
     var query by remember { mutableStateOf("prettier") }
     var hits by remember { mutableStateOf<List<VsixHit>>(emptyList()) }
     var acodeHits by remember { mutableStateOf<List<AcodePlugin>>(emptyList()) }
@@ -58,15 +58,14 @@ fun PluginsPane(modifier: Modifier = Modifier) {
 
     Column(modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Plugins", style = MaterialTheme.typography.titleMedium)
-        Text(
-            "Acode: catálogo oficial acode.app. Los plugins de Acode usan acode.require y se ejecutan en Acode, no en CloudTerm. " +
-                "Open VSX: temas/snippets en este editor.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilterChip(selected = market == "acode", onClick = { market = "acode" }, label = { Text("Acode") })
+            FilterChip(selected = market == "web", onClick = { market = "web" }, label = { Text("Web Acode") })
+            FilterChip(selected = market == "acode", onClick = { market = "acode" }, label = { Text("API Acode") })
             FilterChip(selected = market == "vsx", onClick = { market = "vsx" }, label = { Text("Open VSX") })
+        }
+        if (market == "web") {
+            AcodeWebPane(Modifier.weight(1f).fillMaxWidth())
+            return@Column
         }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(plugins, key = { it.id }) { p ->
@@ -77,37 +76,18 @@ fun PluginsPane(modifier: Modifier = Modifier) {
                 )
             }
             item {
-                Text(if (market == "acode") "Marketplace Acode" else "Open VSX", style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(
-                    query, { query = it },
-                    label = { Text(if (market == "acode") "Buscar en Acode" else "Buscar VSIX") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                OutlinedTextField(query, { query = it }, label = { Text("Buscar") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Button(
                     enabled = !busy,
                     onClick = {
                         busy = true
-                        status = "Buscando…"
                         scope.launch {
                             if (market == "acode") {
-                                acodeHits = withContext(Dispatchers.IO) {
-                                    runCatching { AcodeMarket.search(query) }.getOrElse {
-                                        status = it.message ?: "Error Acode"
-                                        emptyList()
-                                    }
-                                }
+                                acodeHits = withContext(Dispatchers.IO) { runCatching { AcodeMarket.search(query) }.getOrDefault(emptyList()) }
                                 hits = emptyList()
-                                if (acodeHits.isNotEmpty()) status = "${acodeHits.size} plugins Acode"
                             } else {
-                                hits = withContext(Dispatchers.IO) {
-                                    runCatching { OpenVsx.search(query) }.getOrElse {
-                                        status = it.message ?: "Error VSX"
-                                        emptyList()
-                                    }
-                                }
+                                hits = withContext(Dispatchers.IO) { runCatching { OpenVsx.search(query) }.getOrDefault(emptyList()) }
                                 acodeHits = emptyList()
-                                if (hits.isNotEmpty()) status = "${hits.size} VSIX"
                             }
                             busy = false
                         }
@@ -118,62 +98,35 @@ fun PluginsPane(modifier: Modifier = Modifier) {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(hit.name, style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            "${hit.author} · v${hit.version}" + if (hit.free) " · gratis" else " · de pago",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        if (hit.description.isNotBlank()) {
-                            Text(hit.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                enabled = !busy && hit.free,
-                                onClick = {
-                                    busy = true
-                                    status = "Descargando ${hit.name}…"
-                                    scope.launch {
-                                        status = withContext(Dispatchers.IO) {
-                                            runCatching {
-                                                AcodeMarket.download(hit)
-                                                "ZIP de ${hit.name} listo. Ábrelo en Acode: Ajustes → Plugins → + → Remoto/Local."
-                                            }.getOrElse { it.message ?: "Error" }
-                                        }
-                                        busy = false
-                                    }
-                                },
-                            ) { Text(if (hit.free) "Descargar para Acode" else "De pago") }
-                            OutlinedButton(
-                                onClick = {
-                                    ctx.startActivity(
-                                        Intent(Intent.ACTION_VIEW, Uri.parse("https://acode.app/plugin/${hit.id}")),
-                                    )
-                                },
-                            ) { Text("Ficha") }
-                        }
+                        Text("${hit.author} · v${hit.version}", style = MaterialTheme.typography.bodySmall)
+                        Button(enabled = !busy && hit.free, onClick = {
+                            busy = true
+                            scope.launch {
+                                status = withContext(Dispatchers.IO) {
+                                    runCatching { AcodeMarket.download(hit); "ZIP listo para Acode" }.getOrElse { it.message ?: "Error" }
+                                }
+                                busy = false
+                            }
+                        }) { Text(if (hit.free) "Descargar" else "De pago") }
                     }
                 }
             }
             items(hits, key = { it.id }) { hit ->
                 Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(hit.display, style = MaterialTheme.typography.titleSmall)
-                        Text("${hit.namespace} · ${hit.version}", style = MaterialTheme.typography.bodySmall)
-                        Button(
-                            enabled = !busy,
-                            onClick = {
-                                busy = true
-                                scope.launch {
-                                    status = withContext(Dispatchers.IO) {
-                                        runCatching {
-                                            val installed = store.installVsix(hit, OpenVsx.download(hit.downloadUrl))
-                                            "Instalado: ${installed.name}"
-                                        }.getOrElse { it.message ?: "Error" }
-                                    }
-                                    refresh()
-                                    busy = false
+                    Column(Modifier.padding(10.dp)) {
+                        Text(hit.display)
+                        Button(enabled = !busy, onClick = {
+                            busy = true
+                            scope.launch {
+                                status = withContext(Dispatchers.IO) {
+                                    runCatching {
+                                        store.installVsix(hit, OpenVsx.download(hit.downloadUrl))
+                                        "Instalado ${hit.display}"
+                                    }.getOrElse { it.message ?: "Error" }
                                 }
-                            },
-                        ) { Text("Instalar VSIX aquí") }
+                                refresh(); busy = false
+                            }
+                        }) { Text("Instalar VSIX") }
                     }
                 }
             }
@@ -187,7 +140,7 @@ fun PluginsPane(modifier: Modifier = Modifier) {
                 else ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.foxdebug.acodefree")))
             },
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Abrir / instalar Acode") }
+        ) { Text("Abrir Acode") }
     }
 }
 
@@ -202,7 +155,6 @@ private fun PluginCard(plugin: CtPlugin, onToggle: (Boolean) -> Unit, onRemove: 
                 }
                 Switch(checked = plugin.enabled, onCheckedChange = onToggle)
             }
-            Text(plugin.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (onRemove != null) OutlinedButton(onClick = onRemove) { Text("Quitar") }
         }
     }
