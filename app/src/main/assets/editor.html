@@ -7,10 +7,11 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
 <style>
   html, body { margin: 0; height: 100%; background: #0f1419; color: #e6edf3; font-family: ui-monospace, Consolas, monospace; }
-  #bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #161b22; border-bottom: 1px solid #30363d; font-size: 12px; }
-  #name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #7ee787; }
-  button { background: #238636; color: #fff; border: 0; border-radius: 6px; padding: 6px 10px; font-weight: 600; }
-  #wrap { height: calc(100% - 41px); }
+  #bar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #161b22; border-bottom: 1px solid #30363d; font-size: 12px; flex-wrap: wrap; }
+  #name { flex: 1; min-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #7ee787; }
+  button { background: #238636; color: #fff; border: 0; border-radius: 6px; padding: 5px 8px; font-weight: 600; }
+  button.sec { background: #30363d; }
+  #wrap { height: calc(100% - 70px); }
   .CodeMirror { height: 100%; font-size: 13px; background: #0f1419; }
   #code { width: 100%; height: 100%; margin: 0; border: 0; outline: 0; resize: none; background: #0f1419; color: #e6edf3; padding: 8px; font: 13px/1.55 ui-monospace, Consolas, monospace; }
 </style>
@@ -19,6 +20,9 @@
 <div id="bar">
   <div id="name">sin archivo</div>
   <span id="lang"></span>
+  <button class="sec" onclick="ctFormat()">Formatear</button>
+  <button class="sec" onclick="ctComment()">//</button>
+  <button class="sec" onclick="ctSnippet()">Snippet</button>
   <button id="save" onclick="doSave()">Guardar</button>
 </div>
 <div id="wrap"><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea></div>
@@ -55,7 +59,35 @@
     return map[ext] || ext.toUpperCase();
   }
   function value() { return cm ? cm.getValue() : ta.value; }
+  function setValue(v) { if (cm) cm.setValue(v); else ta.value = v; try { Android.changed(v); } catch (e) {} }
   function doSave() { try { Android.save(value()); } catch (e) {} }
+  function ctFormat() {
+    const lines = value().split('\n');
+    let depth = 0;
+    const out = lines.map(function (line) {
+      const t = line.trim();
+      if (/^[}\])]/.test(t)) depth = Math.max(0, depth - 1);
+      const s = '  '.repeat(depth) + t;
+      if (/[{\[(]$/.test(t) && !t.startsWith('//')) depth++;
+      return s;
+    });
+    setValue(out.join('\n'));
+  }
+  function ctComment() {
+    setValue(value().split('\n').map(function (l) {
+      return l.startsWith('//') ? l.replace(/^\/\/\s?/, '') : '// ' + l;
+    }).join('\n'));
+  }
+  function ctSnippet() {
+    const ext = (nameEl.textContent.split('.').pop() || '').toLowerCase();
+    const map = {
+      html: '<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<title></title>\n</head>\n<body>\n\n</body>\n</html>\n',
+      py: 'def main():\n    pass\n\nif __name__ == "__main__":\n    main()\n',
+      js: 'function main() {\n  \n}\n\nmain();\n',
+      kt: 'fun main() {\n    println("hola")\n}\n'
+    };
+    setValue(value() + (value() && !value().endsWith('\n') ? '\n' : '') + (map[ext] || 'fn() {\n  \n}\n'));
+  }
   function bindFallback() {
     ta.addEventListener('input', function () { try { Android.changed(ta.value); } catch (e) {} });
   }
@@ -73,6 +105,9 @@
   }
   window.setFile = setFile;
   window.languageOf = languageOf;
+  window.ctFormat = ctFormat;
+  window.ctComment = ctComment;
+  window.ctSnippet = ctSnippet;
   if (window.CodeMirror) {
     cm = CodeMirror.fromTextArea(ta, {
       theme: 'material-darker',

@@ -21,6 +21,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.pilahito.cloudterm.android.ActiveSession
+import com.pilahito.cloudterm.android.plugins.PluginKind
+import com.pilahito.cloudterm.android.plugins.PluginStore
 import org.json.JSONObject
 
 private class EditorBridge(
@@ -42,6 +44,7 @@ private class EditorBridge(
 @Composable
 fun EditorPane(session: ActiveSession, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
+    val plugins = remember { PluginStore(ctx) }
     var ready = remember { booleanArrayOf(false) }
 
     val web = remember {
@@ -54,7 +57,10 @@ fun EditorPane(session: ActiveSession, modifier: Modifier = Modifier) {
                 EditorBridge(
                     onReady = {
                         ready[0] = true
-                        post { pushFile(this, session) }
+                        post {
+                            pushFile(this, session)
+                            applyTheme(this, plugins)
+                        }
                     },
                     onChanged = { session.onEditorChange(it) },
                     onSave = {
@@ -69,7 +75,10 @@ fun EditorPane(session: ActiveSession, modifier: Modifier = Modifier) {
     }
 
     LaunchedEffect(session.editorPath, session.editorLoading, session.editorText) {
-        if (ready[0] && !session.editorLoading) web.post { pushFile(web, session) }
+        if (ready[0] && !session.editorLoading) web.post {
+            pushFile(web, session)
+            applyTheme(web, plugins)
+        }
     }
 
     DisposableEffect(Unit) {
@@ -79,7 +88,7 @@ fun EditorPane(session: ActiveSession, modifier: Modifier = Modifier) {
     Box(modifier.background(AppBackground)) {
         if (!session.editorOpen) {
             Text(
-                "Abre un archivo de código desde Archivos → Editar código.\nKotlin, JS, Python, HTML, JSON, shell…",
+                "Abre un archivo de código desde Archivos → Editar código.\nPlugins: pestaña Plugins (nativos + temas Open VSX).",
                 modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -99,4 +108,10 @@ private fun pushFile(web: WebView, session: ActiveSession) {
         session.editorName.substringAfterLast('.', "").uppercase(),
     )
     web.evaluateJavascript("setFile($name, $text, languageOf($name) || $lang)", null)
+}
+
+private fun applyTheme(web: WebView, plugins: PluginStore) {
+    val theme = plugins.installed().firstOrNull { it.enabled && it.kind == PluginKind.THEME } ?: return
+    val js = plugins.themeCss(theme.id) ?: return
+    web.evaluateJavascript(js, null)
 }
