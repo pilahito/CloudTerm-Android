@@ -1,0 +1,48 @@
+name: APK de Android
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Compilar APK (debug)
+        run: gradle :app:assembleDebug --no-daemon
+
+      - name: Nombrar el APK
+        run: |
+          mkdir -p dist-apk
+          cp app/build/outputs/apk/debug/*.apk dist-apk/CloudTerm-android-debug.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CloudTerm-Android-debug
+          path: dist-apk/*.apk
+
+      - name: Adjuntar a la release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-apk/*.apk
+          draft: false
+          fail_on_unmatched_files: true

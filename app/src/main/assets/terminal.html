@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="xterm.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #1e2327; overflow: hidden; }
+  #t { height: 100%; padding: 4px; box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="t"></div>
+<script src="xterm.js"></script>
+<script src="addon-fit.js"></script>
+<script>
+  const term = new Terminal({
+    fontFamily: 'monospace',
+    fontSize: 14,
+    cursorBlink: true,
+    scrollback: 5000,
+    theme: { background: '#1e2327' }
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(document.getElementById('t'));
+  fit.fit();
+
+  term.onData(function (d) { Android.input(d); });
+  term.onResize(function (s) { Android.resize(s.cols, s.rows); });
+  window.addEventListener('resize', function () { fit.fit(); });
+
+  // En Android el IME manda keyCode 229 además del evento input:
+  // si xterm procesa los dos, cada letra se duplica.
+  term.attachCustomKeyEventHandler(function (ev) {
+    if (ev.keyCode === 229 || ev.key === 'Unidentified' || ev.key === 'Process') {
+      return false;
+    }
+    return true;
+  });
+
+  if (term.textarea) {
+    term.textarea.setAttribute('autocomplete', 'off');
+    term.textarea.setAttribute('autocorrect', 'off');
+    term.textarea.setAttribute('autocapitalize', 'off');
+    term.textarea.setAttribute('spellcheck', 'false');
+  }
+
+  function writeB64(b64) {
+    const bin = atob(b64);
+    const u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    term.write(u);
+  }
+
+  term.onSelectionChange(function () {
+    try {
+      var sel = term.getSelection();
+      if (sel) Android.copy(sel);
+    } catch (e) {}
+  });
+
+  function copySelection() {
+    try {
+      var sel = term.getSelection();
+      if (sel) Android.copy(sel);
+      return sel || '';
+    } catch (e) { return ''; }
+  }
+
+  term.focus();
+  Android.ready(term.cols, term.rows);
+</script>
+</body>
+</html>
