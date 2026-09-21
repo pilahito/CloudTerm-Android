@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -63,7 +66,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun AppShell(vm: AppViewModel) {
     var splash by remember { mutableStateOf(true) }
-    var tab by remember { mutableIntStateOf(2) }
+    var tab by remember { mutableIntStateOf(0) }
     var palette by remember { mutableStateOf(false) }
     var workbench by remember { mutableStateOf("term") }
     LaunchedEffect(Unit) {
@@ -92,14 +95,8 @@ fun AppShell(vm: AppViewModel) {
                     IconButton(onClick = { palette = true }) {
                         Icon(Icons.Default.Search, contentDescription = "Command Palette", tint = Mint)
                     }
-                    Box {
-                        IconButton(onClick = { }) {
-                            Icon(Icons.Default.Notifications, contentDescription = "Avisos", tint = Mint)
-                        }
-                        Box(
-                            Modifier.align(Alignment.TopEnd).padding(6.dp).size(14.dp).clip(CircleShape).background(0xFFE24B4A.toInt().let { androidx.compose.ui.graphics.Color(it) }),
-                            contentAlignment = Alignment.Center,
-                        ) { Text("3", color = androidx.compose.ui.graphics.Color.White, fontSize = 8.sp) }
+                    IconButton(onClick = { }) {
+                        Icon(Icons.Default.Notifications, contentDescription = "Avisos", tint = Mint)
                     }
                 }
                 Row(
@@ -108,8 +105,8 @@ fun AppShell(vm: AppViewModel) {
                 ) {
                     Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         WorkbenchChip(
-                            title = session?.host?.name ?: "editor",
-                            subtitle = if (session != null) "#40E0D0" else "local",
+                            title = session?.host?.name ?: "Tu equipo de t…",
+                            subtitle = if (session != null) session.host.protocol.label else "local",
                             selected = workbench == "term",
                             onClick = { workbench = "term"; tab = 2 },
                             onClose = if (session != null) ({ vm.disconnect() }) else null,
@@ -128,7 +125,7 @@ fun AppShell(vm: AppViewModel) {
                         onClick = { tab = 1 },
                         modifier = Modifier.size(36.dp),
                         containerColor = Mint,
-                    ) { Icon(Icons.Default.Add, contentDescription = "Nuevo", modifier = Modifier.size(18.dp), tint = AppBackground) }
+                    ) { Icon(Icons.Default.Add, contentDescription = "New Host", modifier = Modifier.size(18.dp), tint = AppBackground) }
                 }
             }
         },
@@ -171,11 +168,11 @@ fun AppShell(vm: AppViewModel) {
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize().background(AppBackground)) {
             when (tab) {
-                0 -> HomePane(onOpen = { tab = 2 })
+                0 -> HomePane(onOpen = { tab = 2 }, onPalette = { palette = true })
                 1 -> if (session != null) FilesPane(session, Modifier.fillMaxSize()) else HostsScreen(vm)
                 2 -> TerminalWorkbench(vm, workbench)
                 3 -> AiPane(vm, session?.editorName?.ifBlank { null }, session?.editorText?.ifBlank { null }, Modifier.fillMaxSize())
-                else -> PluginsPane(Modifier.fillMaxSize())
+                else -> SettingsPane(vm)
             }
             session?.transfer?.let { TransferHud(it, Modifier.align(Alignment.BottomCenter)) }
         }
@@ -193,6 +190,26 @@ fun AppShell(vm: AppViewModel) {
 }
 
 @Composable
+private fun SettingsPane(vm: AppViewModel) {
+    Column(Modifier.fillMaxSize()) {
+        Text("Privacidad", color = Mint, modifier = Modifier.padding(12.dp), fontWeight = FontWeight.SemiBold)
+        Text(
+            "Los hosts se guardan sólo en este teléfono. No hay registro Solaris en GitHub.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp),
+            fontSize = 13.sp,
+        )
+        Button(
+            onClick = { vm.wipeAllPrivate() },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE24B4A)),
+            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+        ) { Text("Borrar servidores, claves y known_hosts") }
+        vm.wipedNotice?.let { Text(it, color = Mint, modifier = Modifier.padding(horizontal = 12.dp), fontSize = 13.sp) }
+        PluginsPane(Modifier.weight(1f))
+    }
+}
+
+@Composable
 private fun TerminalWorkbench(vm: AppViewModel, workbench: String) {
     val session = vm.session
     if (session == null) {
@@ -200,10 +217,7 @@ private fun TerminalWorkbench(vm: AppViewModel, workbench: String) {
         return
     }
     Row(Modifier.fillMaxSize()) {
-        FilesPane(
-            session,
-            Modifier.fillMaxHeight().width(148.dp).background(AppSurface),
-        )
+        FilesPane(session, Modifier.fillMaxHeight().width(148.dp).background(AppSurface))
         Box(Modifier.weight(1f).fillMaxHeight()) {
             if (workbench == "code" || session.editorOpen) {
                 EditorPane(session, Modifier.fillMaxSize())
@@ -251,10 +265,7 @@ private fun Splash() {
     Box(Modifier.fillMaxSize().background(AppBackground), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(28.dp)) {
             Box(
-                Modifier
-                    .clip(RoundedCornerShape(24.dp))
-                    .border(1.5.dp, Mint, RoundedCornerShape(24.dp))
-                    .padding(horizontal = 18.dp, vertical = 8.dp),
+                Modifier.clip(RoundedCornerShape(24.dp)).border(1.5.dp, Mint, RoundedCornerShape(24.dp)).padding(horizontal = 18.dp, vertical = 8.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
@@ -267,23 +278,27 @@ private fun Splash() {
             Spacer(Modifier.height(22.dp))
             Text(
                 "Tu equipo de terminales\nestá listo",
-                color = androidx.compose.ui.graphics.Color.White,
+                color = Color.White,
                 textAlign = TextAlign.Center,
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
                 lineHeight = 32.sp,
             )
+            Spacer(Modifier.height(16.dp))
+            Text("Command Palette", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Ctrl + K", color = Mint, fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
 @Composable
-private fun HomePane(onOpen: () -> Unit) {
+private fun HomePane(onOpen: () -> Unit, onPalette: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Tu equipo de terminales\nestá listo", color = androidx.compose.ui.graphics.Color.White, textAlign = TextAlign.Center, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Tu equipo de terminales\nestá listo", color = Color.White, textAlign = TextAlign.Center, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(12.dp))
-        Text("Home · Servers · Terminal · Agents · Settings", color = Mint, fontSize = 13.sp)
+        Text("Lupa o Ctrl+K · Command Palette", color = Mint, fontSize = 13.sp)
         Spacer(Modifier.height(16.dp))
+        TextButton(onClick = onPalette) { Text("Abrir Command Palette") }
         TextButton(onClick = onOpen) { Text("Abrir Terminal / Editor") }
     }
 }
@@ -314,10 +329,10 @@ private fun CommandPalette(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 TextButton(onClick = onHome, modifier = Modifier.fillMaxWidth()) { Text("Home") }
-                TextButton(onClick = onServers, modifier = Modifier.fillMaxWidth()) { Text("Servers") }
+                TextButton(onClick = onServers, modifier = Modifier.fillMaxWidth()) { Text("Servers / New Host") }
                 TextButton(onClick = onTerminal, modifier = Modifier.fillMaxWidth()) { Text("Terminal / Editor CloudTerm") }
                 TextButton(onClick = onAgents, modifier = Modifier.fillMaxWidth()) { Text("Agents") }
-                TextButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Settings / Plugins") }
+                TextButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Settings / borrar datos") }
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Cerrar") }
             }
         }
