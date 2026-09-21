@@ -22,9 +22,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pilahito.cloudterm.android.ui.AppShell
 import com.pilahito.cloudterm.android.ui.CloudTermTheme
-import com.pilahito.cloudterm.android.ui.HostsScreen
-import com.pilahito.cloudterm.android.ui.SessionScreen
 
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
@@ -47,8 +46,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun App(vm: AppViewModel) {
-    val s = vm.session
-    if (s == null) HostsScreen(vm) else SessionScreen(vm, s)
+    AppShell(vm)
 
     val connecting = vm.connecting
     if (connecting != null && vm.hostKeyRequest == null) {
