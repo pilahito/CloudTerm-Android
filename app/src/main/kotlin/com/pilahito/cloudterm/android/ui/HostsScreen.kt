@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -30,10 +29,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,31 +47,21 @@ import com.pilahito.cloudterm.android.data.AuthType
 import com.pilahito.cloudterm.android.data.Host
 import com.pilahito.cloudterm.android.data.Protocol
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HostsScreen(vm: AppViewModel) {
     var editing by remember { mutableStateOf<Host?>(null) }
     var creating by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<Host?>(null) }
 
-    Scaffold(
-        topBar = { TopAppBar(title = { Text("CloudTerm") }) },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { creating = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Añadir servidor")
-            }
-        },
-    ) { pad ->
+    Box(Modifier.fillMaxSize()) {
         if (vm.hosts.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) {
-                Text(
-                    "Añade tu primer servidor (SSH, SFTP, FTP o FTPS)",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                "Añade tu primer servidor (SSH, SFTP, FTP o FTPS)",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.Center).padding(24.dp),
+            )
         } else {
             LazyColumn(
-                modifier = Modifier.padding(pad),
                 contentPadding = PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -92,17 +79,18 @@ fun HostsScreen(vm: AppViewModel) {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            IconButton(onClick = { editing = host }) {
-                                Icon(Icons.Default.Edit, contentDescription = "Editar")
-                            }
-                            IconButton(onClick = { deleting = host }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Eliminar")
-                            }
+                            IconButton(onClick = { editing = host }) { Icon(Icons.Default.Edit, contentDescription = "Editar") }
+                            IconButton(onClick = { deleting = host }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar") }
                         }
                     }
                 }
             }
         }
+        FloatingActionButton(
+            onClick = { creating = true },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            containerColor = Mint,
+        ) { Icon(Icons.Default.Add, contentDescription = "Añadir servidor") }
     }
 
     if (creating || editing != null) {
@@ -124,9 +112,7 @@ fun HostsScreen(vm: AppViewModel) {
             onDismissRequest = { deleting = null },
             title = { Text("Eliminar servidor") },
             text = { Text("Se borrará «${host.name}» y sus credenciales guardadas.") },
-            confirmButton = {
-                TextButton(onClick = { vm.deleteHost(host); deleting = null }) { Text("Eliminar") }
-            },
+            confirmButton = { TextButton(onClick = { vm.deleteHost(host); deleting = null }) { Text("Eliminar") } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancelar") } },
         )
     }
@@ -149,106 +135,49 @@ private fun HostDialog(
     var password by remember { mutableStateOf("") }
     var passphrase by remember { mutableStateOf("") }
     var keyText by remember { mutableStateOf<String?>(null) }
-
     val ftpLike = protocol == Protocol.FTP || protocol == Protocol.FTPS
     if (ftpLike && auth != AuthType.PASSWORD) auth = AuthType.PASSWORD
-
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
-            keyText = runCatching {
-                ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-            }.getOrNull()
+            keyText = runCatching { ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } }.getOrNull()
         }
     }
-
     val keyOk = auth == AuthType.PASSWORD || keyText != null || hasKey
-    val valid = hostname.isNotBlank() && user.isNotBlank() &&
-        (port.toIntOrNull() ?: 0) in 1..65535 && keyOk
-
+    val valid = hostname.isNotBlank() && user.isNotBlank() && (port.toIntOrNull() ?: 0) in 1..65535 && keyOk
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (initial == null) "Nuevo servidor" else "Editar servidor") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(name, { name = it }, label = { Text("Nombre") }, singleLine = true)
-                OutlinedTextField(
-                    hostname, { hostname = it },
-                    label = { Text("Dirección") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                )
+                OutlinedTextField(hostname, { hostname = it }, label = { Text("Dirección") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
                 Text("Protocolo", style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Protocol.entries.forEach { p ->
-                        FilterChip(
-                            selected = protocol == p,
-                            onClick = {
-                                protocol = p
-                                port = p.defaultPort.toString()
-                            },
-                            label = { Text(p.label) },
-                        )
+                        FilterChip(selected = protocol == p, onClick = { protocol = p; port = p.defaultPort.toString() }, label = { Text(p.label) })
                     }
                 }
-                OutlinedTextField(
-                    port, { port = it.filter(Char::isDigit) },
-                    label = { Text("Puerto") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
+                OutlinedTextField(port, { port = it.filter(Char::isDigit) }, label = { Text("Puerto") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 OutlinedTextField(user, { user = it }, label = { Text("Usuario") }, singleLine = true)
-
                 if (!ftpLike) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = auth == AuthType.PASSWORD,
-                            onClick = { auth = AuthType.PASSWORD },
-                            label = { Text("Contraseña") },
-                        )
-                        FilterChip(
-                            selected = auth == AuthType.KEY,
-                            onClick = { auth = AuthType.KEY },
-                            label = { Text("Clave privada") },
-                        )
+                        FilterChip(selected = auth == AuthType.PASSWORD, onClick = { auth = AuthType.PASSWORD }, label = { Text("Contraseña") })
+                        FilterChip(selected = auth == AuthType.KEY, onClick = { auth = AuthType.KEY }, label = { Text("Clave privada") })
                     }
                 }
-
                 if (auth == AuthType.PASSWORD || ftpLike) {
-                    OutlinedTextField(
-                        password, { password = it },
-                        label = { Text(if (initial != null) "Contraseña (vacío = no cambiar)" else "Contraseña") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    )
+                    OutlinedTextField(password, { password = it }, label = { Text(if (initial != null) "Contraseña (vacío = no cambiar)" else "Contraseña") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
                 } else {
-                    OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }) {
-                        Text(if (keyText != null || hasKey) "Clave cargada ✓ (cambiar)" else "Elegir archivo de clave")
-                    }
-                    OutlinedTextField(
-                        passphrase, { passphrase = it },
-                        label = { Text("Passphrase (si la tiene)") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    )
+                    OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }) { Text(if (keyText != null || hasKey) "Clave cargada ✓" else "Elegir archivo de clave") }
+                    OutlinedTextField(passphrase, { passphrase = it }, label = { Text("Passphrase") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
                 }
             }
         },
         confirmButton = {
-            TextButton(
-                enabled = valid,
-                onClick = {
-                    val base = initial ?: Host(name = "", hostname = "", username = "")
-                    val host = base.copy(
-                        name = name.ifBlank { hostname.trim() },
-                        hostname = hostname.trim(),
-                        port = port.toInt(),
-                        username = user.trim(),
-                        authType = if (ftpLike) AuthType.PASSWORD else auth,
-                        protocol = protocol,
-                    )
-                    onSave(host, password, keyText, passphrase)
-                },
-            ) { Text("Guardar") }
+            TextButton(enabled = valid, onClick = {
+                val base = initial ?: Host(name = "", hostname = "", username = "")
+                onSave(base.copy(name = name.ifBlank { hostname.trim() }, hostname = hostname.trim(), port = port.toInt(), username = user.trim(), authType = if (ftpLike) AuthType.PASSWORD else auth, protocol = protocol), password, keyText, passphrase)
+            }) { Text("Guardar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
