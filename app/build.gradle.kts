@@ -12,13 +12,35 @@ android {
         applicationId = "com.pilahito.cloudterm.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.3.0"
+        versionCode = 6
+        versionName = "1.3.1"
+    }
+
+    signingConfigs {
+        create("stable") {
+            val ks = rootProject.file("store/cloudterm.jks")
+            if (ks.exists()) {
+                storeFile = ks
+                storePassword = "cloudterm"
+                keyAlias = "cloudterm"
+                keyPassword = "cloudterm"
+            }
+        }
     }
 
     buildTypes {
+        debug {
+            val stable = signingConfigs.findByName("stable")
+            if (stable != null && stable.storeFile != null) {
+                signingConfig = stable
+            }
+        }
         release {
             isMinifyEnabled = false
+            val stable = signingConfigs.findByName("stable")
+            if (stable != null && stable.storeFile != null) {
+                signingConfig = stable
+            }
         }
     }
     compileOptions {
