@@ -8,6 +8,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.pilahito.cloudterm.android.ai.AiTask
+import com.pilahito.cloudterm.android.data.AiSettings
 import com.pilahito.cloudterm.android.data.AuthType
 import com.pilahito.cloudterm.android.data.Host
 import com.pilahito.cloudterm.android.data.HostStore
@@ -26,6 +28,7 @@ class HostKeyRequest(val message: String, val decision: CompletableDeferred<Bool
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val store = HostStore(app)
     private val vault = SecretVault(app)
+    private val aiStore = AiSettings(app)
 
     var hosts by mutableStateOf(store.load())
         private set
@@ -36,8 +39,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var hostKeyRequest by mutableStateOf<HostKeyRequest?>(null)
         private set
     var error by mutableStateOf<String?>(null)
+    var aiAssignments by mutableStateOf(aiStore.assignments)
+        private set
 
     fun hasKey(hostId: String): Boolean = vault.has("key:$hostId")
+
+    fun assignModel(task: AiTask, modelId: String) {
+        val next = aiAssignments.toMutableMap()
+        next[task] = modelId
+        aiAssignments = next
+        aiStore.save(assignments = next)
+    }
 
     fun saveHost(host: Host, password: String, keyText: String?, passphrase: String) {
         hosts = if (hosts.any { it.id == host.id }) {
