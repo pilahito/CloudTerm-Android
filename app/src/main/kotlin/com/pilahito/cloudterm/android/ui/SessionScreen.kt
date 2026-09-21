@@ -31,6 +31,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -95,6 +96,7 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
                         text = { Text(if (session.editorDirty) "Código·" else "Código") },
                     )
                     Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("IA") })
+                    Tab(selected = tab == 4, onClick = { tab = 4; hideKeyboard() }, text = { Text("VS") })
                 }
             }
         },
@@ -122,6 +124,12 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
                     fileBody = session.editorText.ifBlank { null },
                     modifier = Modifier.fillMaxSize(),
                 )
+            }
+            if (tab == 4) {
+                VsCodroidPane(session.host, Modifier.fillMaxSize())
+            }
+            session.transfer?.let { t ->
+                TransferHud(t, Modifier.align(Alignment.BottomCenter))
             }
         }
     }

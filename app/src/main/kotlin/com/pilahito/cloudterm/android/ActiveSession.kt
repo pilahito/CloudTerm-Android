@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.pilahito.cloudterm.android.agents.PixelAgents
 import com.pilahito.cloudterm.android.data.Host
 import com.pilahito.cloudterm.android.net.RemoteFs
 import com.pilahito.cloudterm.android.ssh.RemoteFile
@@ -16,7 +17,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.IOException
 
-data class Transfer(val label: String, val done: Long, val total: Long)
+data class Transfer(
+    val label: String,
+    val done: Long,
+    val total: Long,
+    val host: String = "",
+    val fileName: String = "",
+    val action: String = "",
+    val agent: String = PixelAgents.COPISTA,
+) {
+    val agentLine: String
+        get() = PixelAgents.line(agent, action.ifBlank { label }, fileName, host)
+}
 
 class ActiveSession(
     val host: Host,
@@ -37,6 +49,9 @@ class ActiveSession(
     var editorDirty by mutableStateOf(false)
     var editorLoading by mutableStateOf(false)
     var editorOpen by mutableStateOf(false)
+
+    private val hostTag: String
+        get() = "${host.username}@${host.hostname}:${host.port}"
 
     init {
         conn.onShellClosed = { shellClosed = true }
@@ -122,12 +137,21 @@ class ActiveSession(
     fun download(file: RemoteFile, destination: Uri) {
         scope.launch {
             val label = "↓ ${file.name}"
-            transfer = Transfer(label, 0, file.size)
+            fun snap(done: Long) = Transfer(
+                label = label,
+                done = done,
+                total = file.size,
+                host = hostTag,
+                fileName = file.name,
+                action = "Descargando archivo",
+                agent = PixelAgents.forDownload(),
+            )
+            transfer = snap(0)
             try {
                 val out = resolver.openOutputStream(destination)
                     ?: throw IOException("no se pudo escribir el destino")
-                out.use { conn.download(file.path, it) { done -> transfer = Transfer(label, done, file.size) } }
-                notice = "Descargado: ${file.name}"
+                out.use { conn.download(file.path, it) { done -> transfer = snap(done) } }
+                notice = PixelAgents.line(PixelAgents.COPISTA, "descargó", file.name, hostTag)
             } catch (e: Exception) {
                 notice = "Error al descargar: ${e.message}"
             } finally {
@@ -149,12 +173,21 @@ class ActiveSession(
                 }
             }
             val label = "↑ $name"
-            transfer = Transfer(label, 0, size)
+            fun snap(done: Long) = Transfer(
+                label = label,
+                done = done,
+                total = size,
+                host = hostTag,
+                fileName = name,
+                action = "Copiando archivo al servidor",
+                agent = PixelAgents.forUpload(),
+            )
+            transfer = snap(0)
             try {
                 val input = resolver.openInputStream(source)
                     ?: throw IOException("no se pudo leer el archivo")
-                input.use { conn.upload(it, joinPath(path, name)) { done -> transfer = Transfer(label, done, size) } }
-                notice = "Subido: $name"
+                input.use { conn.upload(it, joinPath(path, name)) { done -> transfer = snap(done) } }
+                notice = PixelAgents.line(PixelAgents.COPISTA, "subió", name, hostTag)
                 refresh()
             } catch (e: Exception) {
                 notice = "Error al subir: ${e.message}"
@@ -194,7 +227,7 @@ class ActiveSession(
             try {
                 conn.writeText(remote, editorText)
                 editorDirty = false
-                notice = "Guardado: $editorName"
+                notice = PixelAgents.line(PixelAgents.EDITOR, "guardó", editorName, hostTag)
             } catch (e: Exception) {
                 notice = "No se pudo guardar: ${e.message}"
             } finally {
