@@ -37,26 +37,25 @@ jobs:
       - name: Nombrar y comprobar firma
         run: |
           mkdir -p dist-apk
-          cp app/build/outputs/apk/release/*.apk dist-apk/CloudTerm-android-1.3.6.apk
-          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --verbose dist-apk/CloudTerm-android-1.3.6.apk
+          cp app/build/outputs/apk/release/*.apk dist-apk/CloudTerm-android-1.3.7.apk
+          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --verbose dist-apk/CloudTerm-android-1.3.7.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: CloudTerm-Android-1.3.6
+          name: CloudTerm-Android-1.3.7
           path: dist-apk/*.apk
 
-      - name: Publicar release v1.3.6
+      - name: Publicar release v1.3.7
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.3.6' }}
-          name: CloudTerm Android 1.3.6
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.3.7' }}
+          name: CloudTerm Android 1.3.7
           body: |
-            ## CloudTerm Android 1.3.6
+            ## CloudTerm Android 1.3.7
 
-            UI del video: hero mint, logo hexagonal, oficina isometrica,
-            barra Home / Servers / Terminal / Agents / Settings, Ctrl+K.
-
-            Actualizar desde Settings o el boton de la sesion.
+            Sesión con chrome mint: logo hexagonal, pestañas cian,
+            IA y Pixel Agents con tarjetas del tema.
+            Home sigue el vídeo (hero + oficina isométrica).
           files: dist-apk/*.apk
           draft: false
           fail_on_unmatched_files: true

@@ -4,26 +4,31 @@ import android.content.Context
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,16 +36,19 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.pilahito.cloudterm.android.ActiveSession
 import com.pilahito.cloudterm.android.AppViewModel
 import com.pilahito.cloudterm.android.data.Protocol
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
     val filesFirst = session.host.protocol != Protocol.SSH
@@ -74,72 +82,132 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
         imm.hideSoftInputFromWindow(view.windowToken, 0)
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
-        topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text("${session.host.name} · ${session.host.protocol.label}") },
-                    navigationIcon = {
-                        IconButton(onClick = { confirmExit = true }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Cerrar sesión")
-                        }
-                    },
-                    actions = {
-                        TextButton(onClick = { vm.checkForUpdate(silent = false) }) { Text("Actualizar") }
-                    },
-                )
-                ScrollableTabRow(selectedTabIndex = tab, edgePadding = 8.dp) {
-                    Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Terminal") })
-                    Tab(selected = tab == 1, onClick = { tab = 1; hideKeyboard() }, text = { Text("Archivos") })
-                    Tab(
-                        selected = tab == 2,
-                        onClick = { tab = 2 },
-                        text = { Text(if (session.editorDirty) "Código·" else "Código") },
+    val tabs = listOf("Terminal", "Archivos", "Código", "IA", "Agents")
+
+    Box(Modifier.fillMaxSize().background(CtBg)) {
+        Column(Modifier.fillMaxSize()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(CtSurface)
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = { confirmExit = true }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Cerrar sesión", tint = CtText)
+                }
+                HexLogo(size = 26.dp)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        session.host.name,
+                        color = CtText,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
                     )
-                    Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("IA") })
-                    Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Agents") })
+                    Text(
+                        session.host.protocol.label,
+                        color = CtAccent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .border(1.dp, CtAccent.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                        .clickable { vm.checkForUpdate(silent = false) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                ) {
+                    Text("Actualizar", color = CtAccent, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 }
             }
-        },
-    ) { pad ->
-        Box(Modifier.padding(pad).fillMaxSize()) {
-            if (tab == 0) {
-                TerminalPane(session, onClose = { confirmExit = true }, modifier = Modifier.fillMaxSize())
+
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(CtSurface)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                tabs.forEachIndexed { i, label ->
+                    val selected = tab == i
+                    val shown = if (i == 2 && session.editorDirty) "$label ·" else label
+                    Column(
+                        Modifier
+                            .clickable {
+                                tab = i
+                                if (i == 1) hideKeyboard()
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            shown,
+                            color = if (selected) CtAccent else CtMuted,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            fontSize = 13.sp,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Box(
+                            Modifier
+                                .height(2.dp)
+                                .width(if (selected) 28.dp else 0.dp)
+                                .clip(CircleShape)
+                                .background(CtAccent),
+                        )
+                    }
+                }
             }
-            if (tab == 1) {
-                FilesPane(
-                    session,
-                    Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
-                        .pointerInput(Unit) { detectTapGestures { } },
-                )
-            }
-            if (tab == 2) {
-                EditorPane(session, Modifier.fillMaxSize())
-            }
-            if (tab == 3) {
-                AiPane(
-                    vm = vm,
-                    fileName = session.editorName.ifBlank { null },
-                    fileBody = session.editorText.ifBlank { null },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            if (tab == 4) {
-                PixelAgentsPane(session, Modifier.fillMaxSize())
+            Box(Modifier.fillMaxWidth().height(1.dp).background(CtAccent.copy(alpha = 0.18f)))
+
+            Box(Modifier.weight(1f).fillMaxWidth().background(CtBg)) {
+                if (tab == 0) {
+                    TerminalPane(session, onClose = { confirmExit = true }, modifier = Modifier.fillMaxSize())
+                }
+                if (tab == 1) {
+                    FilesPane(
+                        session,
+                        Modifier
+                            .fillMaxSize()
+                            .background(CtBg)
+                            .pointerInput(Unit) { detectTapGestures { } },
+                    )
+                }
+                if (tab == 2) {
+                    EditorPane(session, Modifier.fillMaxSize())
+                }
+                if (tab == 3) {
+                    AiPane(
+                        vm = vm,
+                        fileName = session.editorName.ifBlank { null },
+                        fileBody = session.editorText.ifBlank { null },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                if (tab == 4) {
+                    PixelAgentsPane(session, Modifier.fillMaxSize())
+                }
             }
         }
+        SnackbarHost(snackbar, modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
 
     if (confirmExit) {
         AlertDialog(
             onDismissRequest = { confirmExit = false },
-            title = { Text("Cerrar sesión") },
-            text = { Text("Se cerrará la conexión con ${session.host.name}.") },
-            confirmButton = { TextButton(onClick = { confirmExit = false; vm.disconnect() }) { Text("Cerrar") } },
-            dismissButton = { TextButton(onClick = { confirmExit = false }) { Text("Seguir") } },
+            title = { Text("Cerrar sesión", color = CtText) },
+            text = { Text("Se cerrará la conexión con ${session.host.name}.", color = CtMuted) },
+            confirmButton = {
+                TextButton(onClick = { confirmExit = false; vm.disconnect() }) {
+                    Text("Cerrar", color = CtPink)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmExit = false }) { Text("Seguir", color = CtAccent) }
+            },
+            containerColor = CtCard,
         )
     }
 }
