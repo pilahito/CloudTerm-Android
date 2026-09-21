@@ -37,11 +37,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import com.pilahito.cloudterm.android.ActiveSession
 import com.pilahito.cloudterm.android.AppViewModel
+import com.pilahito.cloudterm.android.data.Protocol
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
-    var tab by remember { mutableIntStateOf(0) }
+    val filesFirst = session.host.protocol != Protocol.SSH
+    var tab by remember { mutableIntStateOf(if (filesFirst) 1 else 0) }
     var confirmExit by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val ctx = LocalContext.current
@@ -55,9 +57,20 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
         }
     }
 
+    LaunchedEffect(session.editorOpen) {
+        if (session.editorOpen) tab = 2
+    }
+
     BackHandler {
-        if (tab == 1 && session.path.isNotEmpty() && session.path != "/") session.up()
-        else confirmExit = true
+        when {
+            tab == 1 && session.path.isNotEmpty() && session.path != "/" -> session.up()
+            else -> confirmExit = true
+        }
+    }
+
+    fun hideKeyboard() {
+        val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(view.windowToken, 0)
     }
 
     Scaffold(
@@ -65,7 +78,7 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text(session.host.name) },
+                    title = { Text("${session.host.name} · ${session.host.protocol.label}") },
                     navigationIcon = {
                         IconButton(onClick = { confirmExit = true }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Cerrar sesión")
@@ -76,20 +89,22 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
                     Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Terminal") })
                     Tab(
                         selected = tab == 1,
-                        onClick = {
-                            tab = 1
-                            val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                            imm.hideSoftInputFromWindow(view.windowToken, 0)
-                        },
+                        onClick = { tab = 1; hideKeyboard() },
                         text = { Text("Archivos") },
+                    )
+                    Tab(
+                        selected = tab == 2,
+                        onClick = { tab = 2 },
+                        text = { Text(if (session.editorDirty) "Código·" else "Código") },
                     )
                 }
             }
         },
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
-            // El terminal siempre está compuesto: cambiar de pestaña no cierra el shell.
-            TerminalPane(session, onClose = { confirmExit = true }, modifier = Modifier.fillMaxSize())
+            if (tab == 0) {
+                TerminalPane(session, onClose = { confirmExit = true }, modifier = Modifier.fillMaxSize())
+            }
             if (tab == 1) {
                 FilesPane(
                     session,
@@ -98,6 +113,9 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
                         .background(MaterialTheme.colorScheme.background)
                         .pointerInput(Unit) { detectTapGestures { } },
                 )
+            }
+            if (tab == 2) {
+                EditorPane(session, Modifier.fillMaxSize())
             }
         }
     }
