@@ -9,11 +9,12 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.pilahito.cloudterm.android"
+        // Paquete nuevo: el 1.2.0 debug usaba otra firma y Samsung bloqueaba la actualización.
+        applicationId = "com.pilahito.cloudterm.mobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.3.1"
+        versionCode = 8
+        versionName = "1.3.2"
     }
 
     signingConfigs {
@@ -24,19 +25,25 @@ android {
                 storePassword = "cloudterm"
                 keyAlias = "cloudterm"
                 keyPassword = "cloudterm"
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
 
     buildTypes {
         debug {
+            isDebuggable = true
             val stable = signingConfigs.findByName("stable")
             if (stable != null && stable.storeFile != null) {
                 signingConfig = stable
             }
         }
         release {
+            isDebuggable = false
             isMinifyEnabled = false
+            isShrinkResources = false
             val stable = signingConfigs.findByName("stable")
             if (stable != null && stable.storeFile != null) {
                 signingConfig = stable
@@ -54,6 +61,9 @@ android {
         compose = true
     }
     packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
         resources {
             excludes += setOf(
                 "/META-INF/{AL2.0,LGPL2.1}",

@@ -5,27 +5,31 @@ de [CloudTerm](https://github.com/pilahito/CloudTerm) de escritorio.
 
 Protocolos: **SSH**, **SFTP**, **FTP** y **FTPS**. Editor de código remoto.
 
-## Compilar el APK
+## Instalar el APK
 
-### En GitHub Actions (recomendado)
+Descarga **1.3.2** (no uses 1.2.0):
+https://github.com/pilahito/CloudTerm-Android/releases/tag/v1.3.2
 
-1. Actions → *APK de Android* → **Run workflow** (rama `feat/agents-2fa-highlight` o `main`).
-2. Descarga el artefacto `CloudTerm-Android-debug`.
+El 1.2.0 era un APK de depuración. Samsung responde "Aplicación no instalada"
+si queda esa versión o si la firma no coincide.
 
-```bash
-./gradlew :app:assembleDebug
-```
+1. Desinstala CloudTerm anterior si aparece en Ajustes → Apps.
+2. En Archivos o Chrome permite instalar apps desconocidas.
+3. Abre `CloudTerm-android-1.3.2.apk`.
+
+## Compilar
+
+Actions → *APK de Android* → **Run workflow** (rama `main`).
 
 ## Qué incluye
 
 - Protocolo al crear el servidor: SSH (22 + terminal), SFTP (22 archivos),
   FTP (21) y FTPS (990 implícito / 21 explícito).
 - Terminal xterm.js solo en SSH. FTP/FTPS no tienen shell; usan Archivos y Código.
-- Editor visual: pestaña **Código** con resaltado token a token (keywords, strings, comentarios, números, funciones).
-- **Pixel Agents**: pestaña Agents narra cada transferencia (qué archivo se mueve).
-- **Asistente IA** con detector de tarea y asignación de modelo.
-- **2FA TOTP**: secreto en el Keystore; se responde el prompt keyboard-interactive.
-- **Detector de huella**: huella SSH del host al conectar + desbloqueo biométrico de la app (botón Huella ON).
+- Editor visual: pestaña **Código** con resaltado token a token.
+- **Pixel Agents**: narra cada transferencia.
+- **Asistente IA** con detector de tarea.
+- **2FA TOTP** y **detector de huella** (app + host SSH).
 - Credenciales AES-GCM + Android Keystore. No se publican logs del servidor.
 
-Versión **1.2.0**.
+Versión **1.3.2** (`com.pilahito.cloudterm.mobile`).

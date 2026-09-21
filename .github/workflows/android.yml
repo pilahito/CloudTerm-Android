@@ -31,33 +31,35 @@ jobs:
       - name: Decodificar keystore estable
         run: base64 -d store/cloudterm.jks.b64 > store/cloudterm.jks
 
-      - name: Compilar APK firmado
+      - name: Compilar APK firmado release
         run: gradle :app:assembleRelease --no-daemon
 
-      - name: Nombrar el APK
+      - name: Nombrar y comprobar firma
         run: |
           mkdir -p dist-apk
-          cp app/build/outputs/apk/release/*.apk dist-apk/CloudTerm-android-1.3.1.apk
+          cp app/build/outputs/apk/release/*.apk dist-apk/CloudTerm-android-1.3.2.apk
+          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --verbose dist-apk/CloudTerm-android-1.3.2.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: CloudTerm-Android-1.3.1
+          name: CloudTerm-Android-1.3.2
           path: dist-apk/*.apk
 
-      - name: Publicar release v1.3.1
+      - name: Publicar release v1.3.2
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.3.1' }}
-          name: CloudTerm Android 1.3.1
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.3.2' }}
+          name: CloudTerm Android 1.3.2
           body: |
-            ## CloudTerm Android 1.3.1
+            ## CloudTerm Android 1.3.2
 
-            APK firmado con keystore estable (se puede actualizar).
+            APK de **release** firmado (v1 + v2 + v3). Paquete nuevo `com.pilahito.cloudterm.mobile`
+            para que instale aunque tengas el 1.2.0 debug.
 
-            Si sale "Aplicación no instalada":
-            1. Desinstala CloudTerm anterior (Ajustes → Apps).
-            2. En el navegador o Archivos: permitir instalar apps desconocidas.
-            3. Instala este APK otra vez.
+            Si Samsung dice "Aplicación no instalada":
+            1. Ajustes → Aplicaciones → CloudTerm → Desinstalar (la versión vieja).
+            2. Archivos / Chrome → Permitir instalar apps desconocidas.
+            3. Instala **CloudTerm-android-1.3.2.apk** (no uses el 1.2.0).
 
             - SSH, SFTP, FTP y FTPS
             - 2FA TOTP + huella
