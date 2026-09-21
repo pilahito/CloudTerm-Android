@@ -1,52 +1,18 @@
+> **Este proyecto está desactualizado.**
+>
+> Sigue en **[AdministradorArchivos](https://github.com/pilahito/AdministradorArchivos)**.
+
 # CloudTerm Android
 
-Cliente nativo (Kotlin + Jetpack Compose) con la misma identidad visual que
-[CloudTerm de escritorio](https://github.com/pilahito/CloudTerm).
+Cliente nativo (Kotlin + Jetpack Compose). Ya no se mantiene aquí.
 
-**SSH · SFTP · FTP · FTPS** · editor propio · Pixel Agents · asistente IA
+**Proyecto actual:** [pilahito/AdministradorArchivos](https://github.com/pilahito/AdministradorArchivos)
 
-## Descargar
+## Descargas antiguas
 
 | Archivo | Notas |
 | --- | --- |
-| [CloudTerm-android-1.3.5.apk](https://github.com/pilahito/CloudTerm-Android/releases/download/v1.3.5/CloudTerm-android-1.3.5.apk) | Release firmado. Android 8+ |
-| [Todas las versiones](https://github.com/pilahito/CloudTerm-Android/releases) | No uses el 1.2.0 |
+| [CloudTerm-android-1.3.5.apk](https://github.com/pilahito/CloudTerm-Android/releases/download/v1.3.5/CloudTerm-android-1.3.5.apk) | Última build de este repo |
+| [Todas las versiones](https://github.com/pilahito/CloudTerm-Android/releases) | Archivo |
 
 Paquete: `com.pilahito.cloudterm.mobile`
-
-### Actualizar desde la app
-
-En la lista de servidores (y dentro de una sesión) pulsa **Actualizar**.
-CloudTerm mira GitHub Releases, baja el APK e instala. La primera vez
-Android/Samsung pide «Permitir de esta fuente».
-
-### Si sale «Aplicación no instalada»
-
-1. Ajustes → Aplicaciones → CloudTerm → Desinstalar (cualquier versión anterior).
-2. Archivos o Chrome → permitir instalar apps desconocidas.
-3. Instala **1.3.5**. El 1.2.0 era debug y Samsung lo bloquea.
-
-## Qué incluye
-
-- **SSH** (puerto 22, terminal xterm.js), **SFTP**, **FTP** (21) y **FTPS** (990 / explícito).
-- Editor en la pestaña Código, resaltado token a token.
-- **Pixel Agents**: mensaje de qué archivo se está moviendo.
-- **IA** con detector de tarea y modelos básicos según el hardware.
-- **2FA TOTP** en keyboard-interactive y **huella** (app + fingerprint SSH).
-- Contraseñas en Android Keystore (AES-GCM). Nada de logs del servidor en el repo.
-- **Actualizar desde la app** contra GitHub Releases.
-
-## Compilar
-
-Actions → *APK de Android* → **Run workflow** (`main`).
-
-```bash
-gradle :app:assembleRelease
-```
-
-El keystore de Releases vive en `store/cloudterm.jks.b64`.
-La clave de Google Play, cuando exista, no se sube al repo.
-
-## Escritorio
-
-Windows `.exe`, Linux `.deb` / AppImage: [CloudTerm 1.0.6](https://github.com/pilahito/CloudTerm/releases)
