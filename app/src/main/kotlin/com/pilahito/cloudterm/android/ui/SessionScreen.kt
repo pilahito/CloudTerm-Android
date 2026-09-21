@@ -19,8 +19,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import com.pilahito.cloudterm.android.ActiveSession
 import com.pilahito.cloudterm.android.AppViewModel
 import com.pilahito.cloudterm.android.data.Protocol
@@ -85,18 +86,15 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
                         }
                     },
                 )
-                TabRow(selectedTabIndex = tab) {
+                ScrollableTabRow(selectedTabIndex = tab, edgePadding = 8.dp) {
                     Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Terminal") })
-                    Tab(
-                        selected = tab == 1,
-                        onClick = { tab = 1; hideKeyboard() },
-                        text = { Text("Archivos") },
-                    )
+                    Tab(selected = tab == 1, onClick = { tab = 1; hideKeyboard() }, text = { Text("Archivos") })
                     Tab(
                         selected = tab == 2,
                         onClick = { tab = 2 },
                         text = { Text(if (session.editorDirty) "Código·" else "Código") },
                     )
+                    Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("IA") })
                 }
             }
         },
@@ -116,6 +114,14 @@ fun SessionScreen(vm: AppViewModel, session: ActiveSession) {
             }
             if (tab == 2) {
                 EditorPane(session, Modifier.fillMaxSize())
+            }
+            if (tab == 3) {
+                AiPane(
+                    vm = vm,
+                    fileName = session.editorName.ifBlank { null },
+                    fileBody = session.editorText.ifBlank { null },
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
     }
