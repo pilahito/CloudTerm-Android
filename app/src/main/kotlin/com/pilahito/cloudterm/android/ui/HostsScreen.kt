@@ -95,7 +95,7 @@ fun HostsScreen(vm: AppViewModel) {
                     indicatorColor = Color.Transparent,
                 )
                 NavigationBarItem(tab == 0, { tab = 0 }, { Icon(Icons.Filled.Home, null) }, label = { Text("Inicio") }, colors = colors)
-                NavigationBarItem(tab == 1, { tab = 1 }, { Icon(Icons.Filled.Phone, null) }, label = { Text("Servidores") }, colors = colors)
+                NavigationBarItem(tab == 1, { tab = 1 }, { ServerIcon(size = 22.dp, tint = if (tab == 1) CtAccent else CtMuted) }, label = { Text("Servidores") }, colors = colors)
                 NavigationBarItem(tab == 2, { tab = 2; if (vm.hosts.isNotEmpty()) vm.connect(vm.hosts.first()) }, { Icon(Icons.Filled.Search, null) }, label = { Text("Terminal") }, colors = colors)
                 NavigationBarItem(tab == 3, { tab = 3 }, { Icon(Icons.Filled.Person, null) }, label = { Text("Agentes") }, colors = colors)
                 NavigationBarItem(tab == 4, { tab = 4 }, { Icon(Icons.Filled.Settings, null) }, label = { Text("Ajustes") }, colors = colors)

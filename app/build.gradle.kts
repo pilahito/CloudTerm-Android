@@ -1,4 +1,4 @@
-plugins {
+﻿plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -12,8 +12,8 @@ android {
         applicationId = "com.pilahito.cloudterm.mobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15
-        versionName = "1.3.9"
+        versionCode = 16
+        versionName = "1.3.10"
     }
 
     signingConfigs {
@@ -95,3 +95,4 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     implementation("commons-net:commons-net:3.11.1")
 }
+

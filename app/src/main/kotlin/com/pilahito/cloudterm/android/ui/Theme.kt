@@ -64,11 +64,63 @@ fun HexLogo(size: Dp = 28.dp, modifier: Modifier = Modifier) {
         hex.close()
         drawPath(hex, CtAccent.copy(alpha = 0.18f))
         drawPath(hex, CtAccent, style = Stroke(width = s * 0.08f, cap = StrokeCap.Round))
-        val sw = s * 0.10f
-        drawLine(CtAccent, Offset(cx - r * 0.22f, cy - r * 0.28f), Offset(cx + r * 0.18f, cy - r * 0.28f), strokeWidth = sw, cap = StrokeCap.Round)
-        drawLine(CtAccent, Offset(cx + r * 0.18f, cy - r * 0.28f), Offset(cx - r * 0.10f, cy + r * 0.08f), strokeWidth = sw, cap = StrokeCap.Round)
-        drawLine(CtAccent, Offset(cx - r * 0.22f, cy + r * 0.08f), Offset(cx + r * 0.22f, cy + r * 0.08f), strokeWidth = sw, cap = StrokeCap.Round)
-        drawLine(CtAccent, Offset(cx - r * 0.10f, cy + r * 0.08f), Offset(cx + r * 0.10f, cy + r * 0.32f), strokeWidth = sw, cap = StrokeCap.Round)
+
+        // La "S" del simbolo. Antes eran cuatro trazos rectos, que dibujaban una
+        // "Z" y no se parecia al video. Ahora es una S de curvas, mas fina y mas
+        // corta que el hexagono, para que se lea y no lo rellene.
+        val sw = s * 0.085f
+        val x0 = cx - r * 0.40f
+        val x1 = cx + r * 0.40f
+        val yTop = cy - r * 0.46f
+        val yMid = cy
+        val yBot = cy + r * 0.46f
+        val sPath = Path().apply {
+            moveTo(x1, yTop)
+            cubicTo(cx + r * 0.06f, yTop - r * 0.20f, cx - r * 0.24f, yTop + r * 0.08f, x0, yMid)
+            cubicTo(cx + r * 0.24f, yMid + r * 0.08f, cx - r * 0.06f, yBot + r * 0.20f, x1, yBot)
+        }
+        drawPath(sPath, CtAccent, style = Stroke(width = sw, cap = StrokeCap.Round))
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Icono de servidor                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Icono de servidor: tres bandejas apiladas con su piloto.
+ *
+ * Se dibuja a mano porque `material-icons-core` es el paquete recortado (unos
+ * cuarenta iconos) y no trae ninguno de servidor; la alternativa seria anadir
+ * `material-icons-extended`, que mete miles de iconos en el APK solo por uno.
+ */
+@Composable
+fun ServerIcon(size: Dp = 22.dp, tint: Color = CtMuted, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val ancho = w * 0.78f
+        val alto = h * 0.22f
+        val x0 = (w - ancho) / 2f
+        val hueco = h * 0.10f
+        val y0 = (h - (alto * 3 + hueco * 2)) / 2f
+
+        for (i in 0..2) {
+            val y = y0 + i * (alto + hueco)
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(x0, y),
+                size = androidx.compose.ui.geometry.Size(ancho, alto),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(alto * 0.35f),
+            )
+            // Piloto a la izquierda de cada bandeja, en el color de fondo para
+            // que se vea como un hueco.
+            drawCircle(
+                color = CtBg,
+                radius = alto * 0.13f,
+                center = Offset(x0 + alto * 0.42f, y + alto / 2f),
+            )
+        }
     }
 }
 
