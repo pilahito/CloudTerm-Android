@@ -34,28 +34,42 @@ jobs:
       - name: Compilar APK firmado release
         run: gradle :app:assembleRelease --no-daemon
 
+      # La version se lee del build.gradle.kts para que el nombre del APK y el de
+      # la release no se queden atras al subir de version. Antes estaba escrita a
+      # mano y se publico un APK 1.3.8 con el nombre 1.3.7.
+      - name: Averiguar la version
+        id: v
+        run: |
+          V=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -1)
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Version detectada: $V"
+
       - name: Nombrar y comprobar firma
         run: |
           mkdir -p dist-apk
-          cp app/build/outputs/apk/release/*.apk dist-apk/CloudTerm-android-1.3.7.apk
-          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --verbose dist-apk/CloudTerm-android-1.3.7.apk
+          cp app/build/outputs/apk/release/*.apk "dist-apk/CloudTerm-android-${{ steps.v.outputs.version }}.apk"
+          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --verbose "dist-apk/CloudTerm-android-${{ steps.v.outputs.version }}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: CloudTerm-Android-1.3.7
+          name: CloudTerm-Android-${{ steps.v.outputs.version }}
           path: dist-apk/*.apk
 
-      - name: Publicar release v1.3.7
+      - name: Publicar release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.3.7' }}
-          name: CloudTerm Android 1.3.7
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', steps.v.outputs.version) }}
+          name: CloudTerm Android ${{ steps.v.outputs.version }}
           body: |
-            ## CloudTerm Android 1.3.7
+            ## CloudTerm Android ${{ steps.v.outputs.version }}
 
-            Sesión con chrome mint: logo hexagonal, pestañas cian,
-            IA y Pixel Agents con tarjetas del tema.
-            Home sigue el vídeo (hero + oficina isométrica).
+            Interfaz con la estética de los vídeos: cielo estrellado y rejilla en
+            perspectiva, y el hero de la Home ya no pide pulsar `Ctrl+K` (en
+            Android no hay teclado): ahora es un botón que abre la paleta.
+
+            Conexiones SSH más rápidas: el orden de los métodos de autenticación
+            se elige según lo que tengas configurado, sin compresión y con
+            `tcpNoDelay` para que el teclado responda.
           files: dist-apk/*.apk
           draft: false
           fail_on_unmatched_files: true
