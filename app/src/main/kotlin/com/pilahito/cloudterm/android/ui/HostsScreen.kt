@@ -94,11 +94,11 @@ fun HostsScreen(vm: AppViewModel) {
                     unselectedTextColor = CtMuted,
                     indicatorColor = Color.Transparent,
                 )
-                NavigationBarItem(tab == 0, { tab = 0 }, { Icon(Icons.Filled.Home, null) }, label = { Text("Home") }, colors = colors)
-                NavigationBarItem(tab == 1, { tab = 1 }, { Icon(Icons.Filled.Phone, null) }, label = { Text("Servers") }, colors = colors)
+                NavigationBarItem(tab == 0, { tab = 0 }, { Icon(Icons.Filled.Home, null) }, label = { Text("Inicio") }, colors = colors)
+                NavigationBarItem(tab == 1, { tab = 1 }, { Icon(Icons.Filled.Phone, null) }, label = { Text("Servidores") }, colors = colors)
                 NavigationBarItem(tab == 2, { tab = 2; if (vm.hosts.isNotEmpty()) vm.connect(vm.hosts.first()) }, { Icon(Icons.Filled.Search, null) }, label = { Text("Terminal") }, colors = colors)
-                NavigationBarItem(tab == 3, { tab = 3 }, { Icon(Icons.Filled.Person, null) }, label = { Text("Agents") }, colors = colors)
-                NavigationBarItem(tab == 4, { tab = 4 }, { Icon(Icons.Filled.Settings, null) }, label = { Text("Settings") }, colors = colors)
+                NavigationBarItem(tab == 3, { tab = 3 }, { Icon(Icons.Filled.Person, null) }, label = { Text("Agentes") }, colors = colors)
+                NavigationBarItem(tab == 4, { tab = 4 }, { Icon(Icons.Filled.Settings, null) }, label = { Text("Ajustes") }, colors = colors)
             }
         },
     ) { pad ->
@@ -239,11 +239,11 @@ fun OfficeScene(modifier: Modifier = Modifier) {
 private fun ServersPane(hosts: List<Host>, onOpen: (Host) -> Unit, onEdit: (Host) -> Unit, onDelete: (Host) -> Unit, onAdd: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Remote hosts", color = CtText, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Text("Servidores remotos", color = CtText, fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Spacer(Modifier.weight(1f))
             IconButton(onClick = onAdd) { Icon(Icons.Filled.Add, null, tint = CtAccent) }
         }
-        Text("Scan existing servers", color = CtMuted, fontSize = 13.sp)
+        Text("Escanear servidores existentes", color = CtMuted, fontSize = 13.sp)
         Spacer(Modifier.height(10.dp))
         if (hosts.isEmpty()) {
             Text("Aun no hay servidores. Pulsa + para anadir SSH, SFTP, FTP o FTPS.", color = CtMuted)
@@ -280,7 +280,7 @@ private fun AgentsLobby(hosts: List<Host>) {
 @Composable
 private fun SettingsPane(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Settings", color = CtText, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+        Text("Ajustes", color = CtText, fontWeight = FontWeight.Bold, fontSize = 22.sp)
         TextButton(onClick = { vm.checkForUpdate(silent = false) }) { Text("Actualizar app", color = CtAccent) }
         TextButton(onClick = { vm.setBiometric(!vm.biometricEnabled) }) {
             Text(if (vm.biometricEnabled) "Huella ON" else "Huella OFF", color = CtAccent)
@@ -293,10 +293,10 @@ private fun SettingsPane(vm: AppViewModel) {
 private fun CommandPalette(hosts: List<Host>, query: String, onQuery: (String) -> Unit, onClose: () -> Unit, onHost: (Host) -> Unit, onAdd: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Command Palette", color = CtAccent) },
+        title = { Text("Paleta de comandos", color = CtAccent) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(query, onQuery, placeholder = { Text("Search") }, singleLine = true, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CtAccent))
+                OutlinedTextField(query, onQuery, placeholder = { Text("Buscar") }, singleLine = true, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CtAccent))
                 val filtered = hosts.filter { it.name.contains(query, true) || it.hostname.contains(query, true) }
                 filtered.take(6).forEach { h -> Text(h.name, color = CtText, modifier = Modifier.fillMaxWidth().clickable { onHost(h) }.padding(8.dp)) }
                 Text("Anadir servidor", color = CtAccent, modifier = Modifier.clickable(onClick = onAdd).padding(8.dp))
