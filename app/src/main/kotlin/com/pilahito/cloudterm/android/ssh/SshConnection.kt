@@ -87,10 +87,39 @@ class SshConnection(
         val s = jsch.getSession(host.username, host.hostname, host.port)
         if (!password.isNullOrEmpty()) s.setPassword(password)
         s.setConfig("StrictHostKeyChecking", "ask")
-        s.setConfig("PreferredAuthentications", "publickey,keyboard-interactive,password")
-        s.setConfig("MaxAuthTries", "5")
+
+        // ── Optimización de la conexión ──────────────────────────────────────
+        //
+        // JSch prueba los métodos de autenticación EN EL ORDEN en que se
+        // escriben aquí, y cada intento fallido es una ida y vuelta completa al
+        // servidor. Si se dejan los tres, con una clave que el servidor no
+        // acepta se pierde tiempo en `keyboard-interactive` (que además puede
+        // abrir un prompt y esperar) antes de llegar a `password`.
+        //
+        // Se ordena según lo que realmente se tenga configurado, así el que va
+        // a funcionar se prueba primero.
+        val metodos = when {
+            !privateKey.isNullOrBlank() -> "publickey,password,keyboard-interactive"
+            !password.isNullOrEmpty() -> "password,keyboard-interactive"
+            else -> "keyboard-interactive,publickey"
+        }
+        s.setConfig("PreferredAuthentications", metodos)
+        s.setConfig("MaxAuthTries", "3")
+
+        // Sin comprimir: en una terminal interactiva el tráfico es mínimo y la
+        // compresión solo añade CPU (que en el móvil se nota) y retraso.
+        s.setConfig("compression.s2c", "none")
+        s.setConfig("compression.c2s", "none")
+
+        // Enviar los paquetes pequeños en cuanto se escriben, sin esperar a
+        // llenar el buffer de Nagle. Es lo que hace que el teclado responda.
+        s.setConfig("tcpNoDelay", "true")
+
         s.timeout = 20_000
         s.setUserInfo(InteractiveUserInfo(password, passphrase, totpSecret, confirmHostKey))
+
+        // Latido para que el router/NAT no corte una sesión ociosa y para
+        // detectar antes una conexión muerta.
         s.setServerAliveInterval(15_000)
         s.setServerAliveCountMax(4)
         try {

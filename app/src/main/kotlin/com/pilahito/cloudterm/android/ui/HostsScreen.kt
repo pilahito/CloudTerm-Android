@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -168,12 +170,17 @@ private fun HomeHero(hosts: List<Host>, onPalette: () -> Unit, onAdd: () -> Unit
         Spacer(Modifier.height(12.dp))
         OfficeScene(Modifier.fillMaxWidth().height(240.dp))
         Spacer(Modifier.height(16.dp))
-        Row(Modifier.clip(RoundedCornerShape(14.dp)).clickable(onClick = onPalette).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            KeyCap("Ctrl", CtPink)
-            Text("  +  ", color = CtMuted)
-            KeyCap("K", CtAccent)
-            Spacer(Modifier.width(10.dp))
-            Text("Para empezar a usar\nlos atajos de teclado", color = CtMuted, fontSize = 13.sp)
+        // En Android no hay teclado: un atajo «Ctrl + K» no se puede pulsar.
+        // Se ofrece un botón que hace lo mismo y sí se puede tocar.
+        Button(
+            onClick = onPalette,
+            colors = ButtonDefaults.buttonColors(containerColor = CtAccent, contentColor = CtBg),
+            shape = RoundedCornerShape(14.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        ) {
+            Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Buscar y comandos", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         }
         Spacer(Modifier.height(16.dp))
         if (hosts.isEmpty()) {
@@ -184,13 +191,6 @@ private fun HomeHero(hosts: List<Host>, onPalette: () -> Unit, onAdd: () -> Unit
             }
         }
         Spacer(Modifier.height(24.dp))
-    }
-}
-
-@Composable
-private fun KeyCap(label: String, color: Color) {
-    Box(Modifier.clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.18f)).border(1.dp, color, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp)) {
-        Text(label, color = color, fontWeight = FontWeight.Bold, fontSize = 13.sp)
     }
 }
 
@@ -277,7 +277,7 @@ private fun SettingsPane(vm: AppViewModel) {
         TextButton(onClick = { vm.setBiometric(!vm.biometricEnabled) }) {
             Text(if (vm.biometricEnabled) "Huella ON" else "Huella OFF", color = CtAccent)
         }
-        Text("Tema mint · hex logo · atajos Ctrl+K", color = CtMuted, fontSize = 13.sp)
+        Text("Tema mint · hex logo", color = CtMuted, fontSize = 13.sp)
     }
 }
 
