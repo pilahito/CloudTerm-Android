@@ -62,24 +62,17 @@ fun HexLogo(size: Dp = 28.dp, modifier: Modifier = Modifier) {
             if (i == 0) hex.moveTo(x, y) else hex.lineTo(x, y)
         }
         hex.close()
-        drawPath(hex, CtAccent.copy(alpha = 0.18f))
+        // Placa de fondo: el hexagono se rellena, como en el simbolo del video.
+        drawPath(hex, CtAccent.copy(alpha = 0.22f))
         drawPath(hex, CtAccent, style = Stroke(width = s * 0.08f, cap = StrokeCap.Round))
 
-        // La "S" del simbolo. Antes eran cuatro trazos rectos, que dibujaban una
-        // "Z" y no se parecia al video. Ahora es una S de curvas, mas fina y mas
-        // corta que el hexagono, para que se lea y no lo rellene.
-        val sw = s * 0.085f
-        val x0 = cx - r * 0.40f
-        val x1 = cx + r * 0.40f
-        val yTop = cy - r * 0.46f
-        val yMid = cy
-        val yBot = cy + r * 0.46f
-        val sPath = Path().apply {
-            moveTo(x1, yTop)
-            cubicTo(cx + r * 0.06f, yTop - r * 0.20f, cx - r * 0.24f, yTop + r * 0.08f, x0, yMid)
-            cubicTo(cx + r * 0.24f, yMid + r * 0.08f, cx - r * 0.06f, yBot + r * 0.20f, x1, yBot)
-        }
-        drawPath(sPath, CtAccent, style = Stroke(width = sw, cap = StrokeCap.Round))
+        // El glifo: trazos rectos que dibujan la "Z" del simbolo. Es el original;
+        // una version anterior lo cambio por una "S" de curvas y no era.
+        val sw = s * 0.10f
+        drawLine(CtAccent, Offset(cx - r * 0.22f, cy - r * 0.28f), Offset(cx + r * 0.18f, cy - r * 0.28f), strokeWidth = sw, cap = StrokeCap.Round)
+        drawLine(CtAccent, Offset(cx + r * 0.18f, cy - r * 0.28f), Offset(cx - r * 0.10f, cy + r * 0.08f), strokeWidth = sw, cap = StrokeCap.Round)
+        drawLine(CtAccent, Offset(cx - r * 0.22f, cy + r * 0.08f), Offset(cx + r * 0.22f, cy + r * 0.08f), strokeWidth = sw, cap = StrokeCap.Round)
+        drawLine(CtAccent, Offset(cx - r * 0.10f, cy + r * 0.08f), Offset(cx + r * 0.10f, cy + r * 0.32f), strokeWidth = sw, cap = StrokeCap.Round)
     }
 }
 

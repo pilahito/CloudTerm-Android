@@ -12,8 +12,8 @@ android {
         applicationId = "com.pilahito.cloudterm.mobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 16
-        versionName = "1.3.10"
+        versionCode = 17
+        versionName = "1.3.11"
     }
 
     signingConfigs {
@@ -95,4 +95,5 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     implementation("commons-net:commons-net:3.11.1")
 }
+
 
