@@ -9,3 +9,7 @@ captures/
 *.ap_
 *.aab
 app/release/
+
+# Clave de firma descodificada en local a partir de store/cloudterm.jks.b64.
+# El .b64 sí va en el repo (lo usa Actions); el .jks binario no.
+store/cloudterm.jks

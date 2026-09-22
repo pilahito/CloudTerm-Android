@@ -102,24 +102,32 @@ fun HostsScreen(vm: AppViewModel) {
             }
         },
     ) { pad ->
-        Column(Modifier.fillMaxSize().padding(pad).background(CtBg)) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                HexLogo(30.dp)
-                Spacer(Modifier.width(10.dp))
-                Text("CloudTerm", color = CtText, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = { palette = true }) { Icon(Icons.Filled.Search, null, tint = CtMuted) }
-                IconButton(onClick = { }) { Icon(Icons.Filled.Notifications, null, tint = CtMuted) }
-            }
-            when (tab) {
-                0 -> HomeHero(hosts = vm.hosts, onPalette = { palette = true }, onAdd = { creating = true }, onOpen = { vm.connect(it) })
-                1 -> ServersPane(hosts = vm.hosts, onOpen = { vm.connect(it) }, onEdit = { editing = it }, onDelete = { deleting = it }, onAdd = { creating = true })
-                3 -> AgentsLobby(hosts = vm.hosts)
-                4 -> SettingsPane(vm)
-                else -> HomeHero(vm.hosts, { palette = true }, { creating = true }, { vm.connect(it) })
+        Box(Modifier.fillMaxSize().padding(pad).background(CtBg)) {
+            // Fondo decorativo: cielo estrellado y rejilla en perspectiva, como
+            // en los videos. Va detras y sin recibir toques.
+            StarField(Modifier.matchParentSize())
+            IsoGrid(
+                Modifier.matchParentSize().align(Alignment.BottomCenter).height(320.dp),
+            )
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    HexLogo(30.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text("CloudTerm", color = CtText, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { palette = true }) { Icon(Icons.Filled.Search, null, tint = CtMuted) }
+                    IconButton(onClick = { }) { Icon(Icons.Filled.Notifications, null, tint = CtMuted) }
+                }
+                when (tab) {
+                    0 -> HomeHero(hosts = vm.hosts, onPalette = { palette = true }, onAdd = { creating = true }, onOpen = { vm.connect(it) })
+                    1 -> ServersPane(hosts = vm.hosts, onOpen = { vm.connect(it) }, onEdit = { editing = it }, onDelete = { deleting = it }, onAdd = { creating = true })
+                    3 -> AgentsLobby(hosts = vm.hosts)
+                    4 -> SettingsPane(vm)
+                    else -> HomeHero(vm.hosts, { palette = true }, { creating = true }, { vm.connect(it) })
+                }
             }
         }
     }
