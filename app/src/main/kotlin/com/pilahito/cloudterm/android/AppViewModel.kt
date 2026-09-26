@@ -10,6 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pilahito.cloudterm.android.ai.AiTask
+import com.pilahito.cloudterm.android.auth.OAuthClient
+import com.pilahito.cloudterm.android.data.AccountStore
 import com.pilahito.cloudterm.android.data.AiSettings
 import com.pilahito.cloudterm.android.data.AuthType
 import com.pilahito.cloudterm.android.data.Host
@@ -22,8 +24,10 @@ import com.pilahito.cloudterm.android.net.RemoteFs
 import com.pilahito.cloudterm.android.ssh.SshConnection
 import com.pilahito.cloudterm.android.update.AppUpdater
 import com.pilahito.cloudterm.android.update.UpdateInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -36,6 +40,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val vault = SecretVault(app)
     private val aiStore = AiSettings(app)
     private val lock = LockSettings(app)
+    private val accounts = AccountStore(app)
+    private val oauth = OAuthClient(app)
+    private var authJob: Job? = null
+
+    var account by mutableStateOf(accounts.account())
+        private set
+    var authBusy by mutableStateOf(false)
+        private set
+    var authMessage by mutableStateOf<String?>(null)
 
     var hosts by mutableStateOf(store.load())
         private set
@@ -62,6 +75,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         checkForUpdate(silent = true)
+    }
+
+    fun signInGithub() {
+        oauth.cancel()
+        authJob?.cancel()
+        authJob = viewModelScope.launch {
+            authBusy = true
+            authMessage = null
+            try {
+                val signed = withContext(Dispatchers.IO) {
+                    oauth.signInGithub("", null) {}
+                }
+                accounts.saveAccount(signed, oauth.deliveredToken)
+                account = signed
+                authMessage = null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (err: Exception) {
+                authMessage = err.message ?: "No se pudo iniciar sesión con GitHub"
+            } finally {
+                authBusy = false
+            }
+        }
+    }
+
+    fun signOutGithub() {
+        oauth.cancel()
+        authJob?.cancel()
+        accounts.signOut()
+        account = null
+        authMessage = null
     }
 
     fun setBiometric(enabled: Boolean) {

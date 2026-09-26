@@ -281,6 +281,19 @@ private fun AgentsLobby(hosts: List<Host>) {
 private fun SettingsPane(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Ajustes", color = CtText, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+        val cuenta = vm.account
+        Text(
+            if (cuenta == null) "Sin sesión de GitHub" else listOf(cuenta.name, cuenta.email).filter { it.isNotBlank() }.joinToString(" · "),
+            color = CtMuted,
+            fontSize = 13.sp,
+        )
+        TextButton(onClick = { vm.signInGithub() }, enabled = !vm.authBusy) {
+            Text(if (vm.authBusy) "Esperando a GitHub…" else "Iniciar sesión con GitHub", color = CtAccent)
+        }
+        if (cuenta != null) {
+            TextButton(onClick = { vm.signOutGithub() }) { Text("Cerrar sesión", color = CtMuted) }
+        }
+        vm.authMessage?.let { Text(it, color = CtMuted, fontSize = 13.sp) }
         TextButton(onClick = { vm.checkForUpdate(silent = false) }) { Text("Actualizar app", color = CtAccent) }
         TextButton(onClick = { vm.setBiometric(!vm.biometricEnabled) }) {
             Text(if (vm.biometricEnabled) "Huella ON" else "Huella OFF", color = CtAccent)
