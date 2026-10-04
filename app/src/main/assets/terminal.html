@@ -6,7 +6,10 @@
 <link rel="stylesheet" href="xterm.css">
 <style>
   html, body { margin: 0; height: 100%; background: #1e2327; overflow: hidden; }
-  #t { height: 100%; padding: 4px; box-sizing: border-box; }
+  /* El alto se fija por JavaScript (ver «ajustar»): en el WebView de Android
+     `height: 100%` se resuelve contra un bloque de altura cero, el contenedor
+     se quedaba en 8 px y la terminal salía de una sola fila. */
+  #t { height: 100vh; padding: 4px; box-sizing: border-box; }
 </style>
 </head>
 <body>
@@ -24,11 +27,25 @@
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(document.getElementById('t'));
-  fit.fit();
+
+  // Alto explícito, en píxeles, del viewport real. El WebView de Android mide
+  // `window.innerHeight` bien aunque `html`/`body` digan 0, así que de ahí sale
+  // el tamaño bueno. Sin esto, `fit()` calculaba 47x1 y la terminal no se veía.
+  const caja = document.getElementById('t');
+  function ajustar() {
+    const alto = window.innerHeight || document.documentElement.clientHeight || 0;
+    if (alto > 0) caja.style.height = alto + 'px';
+    fit.fit();
+    return term.rows;
+  }
 
   term.onData(function (d) { Android.input(d); });
   term.onResize(function (s) { Android.resize(s.cols, s.rows); });
-  window.addEventListener('resize', function () { fit.fit(); });
+  window.addEventListener('resize', ajustar);
+  // El WebView cambia de tamaño cuando aparece el teclado en pantalla: con el
+  // observador, la terminal se reajusta sola en vez de quedarse con las filas
+  // de cuando se abrió.
+  if (window.ResizeObserver) new ResizeObserver(function () { fit.fit(); }).observe(caja);
 
   // En Android el IME manda keyCode 229 además del evento input:
   // si xterm procesa los dos, cada letra se duplica.
@@ -69,7 +86,18 @@
   }
 
   term.focus();
-  Android.ready(term.cols, term.rows);
+
+  // Al shell se le dice el tamaño cuando la medida ya es de verdad. Si se
+  // abriera con una sola fila, el PTY remoto nace con una fila y el prompt
+  // sale cortado; se reintenta hasta que el WebView tenga alto.
+  (function avisar(intentos) {
+    const filas = ajustar();
+    if (filas > 1 || intentos <= 0) {
+      Android.ready(term.cols, term.rows);
+      return;
+    }
+    setTimeout(function () { avisar(intentos - 1); }, 50);
+  })(40);
 </script>
 </body>
 </html>
