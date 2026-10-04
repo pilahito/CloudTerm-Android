@@ -12,8 +12,8 @@ android {
         applicationId = "com.pilahito.cloudterm.mobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 17
-        versionName = "1.3.11"
+        versionCode = 18
+        versionName = "1.3.12"
     }
 
     signingConfigs {

@@ -63,13 +63,22 @@ jobs:
           body: |
             ## CloudTerm Android ${{ steps.v.outputs.version }}
 
-            Interfaz con la estética de los vídeos: cielo estrellado y rejilla en
-            perspectiva, y el hero de la Home ya no pide pulsar `Ctrl+K` (en
-            Android no hay teclado): ahora es un botón que abre la paleta.
+            **Aviso cuando la clave del servidor ha cambiado.** El diálogo de
+            huella pintaba igual un servidor desconocido y una clave que ya no
+            es la que aceptaste: mismo texto y mismo botón, así que el aviso no
+            protegía de nada. Ahora sale una pantalla aparte que explica que la
+            clave no es la de antes —puede ser una reinstalación o alguien en
+            medio—, enseña la huella nueva y deja «Confiar de todos modos» como
+            opción de riesgo, con «Cancelar y revisar» destacada.
 
-            Conexiones SSH más rápidas: el orden de los métodos de autenticación
-            se elige según lo que tengas configurado, sin compresión y con
-            `tcpNoDelay` para que el teclado responda.
+            **La terminal ya no nace con una sola fila.** En el WebView el
+            contenedor se quedaba en 8 px y la sesión se abría con una fila: el
+            prompt salía cortado. Ahora se ajusta al alto real y se reajusta
+            cuando aparece el teclado en pantalla.
+
+            Además: «conexión rechazada» ya no se cuenta como «ese puerto es
+            FTPS/FTP» —en un 2222 el mensaje era directamente falso—, y la lista
+            de servidores enseña el puerto cuando no es el de siempre.
           files: dist-apk/*.apk
           draft: false
           fail_on_unmatched_files: true
