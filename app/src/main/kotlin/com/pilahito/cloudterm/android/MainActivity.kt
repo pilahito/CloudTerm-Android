@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -82,28 +84,67 @@ private fun App(vm: AppViewModel) {
 
     vm.hostKeyRequest?.let { request ->
         val fp = HostFingerprint.extract(request.message)
+        // Dos casos que NO se pueden pintar igual: la primera vez que se ve un
+        // servidor, donde confiar es lo normal, y una clave que ya no es la que
+        // se aceptó antes. En el segundo, decir «comprueba la huella» y ofrecer
+        // el mismo botón de siempre convierte el aviso en un trámite: se pulsa y
+        // adelante, que es justo lo que aprovecharía alguien en medio.
+        val cambiada = HostFingerprint.hasChanged(request.message)
         AlertDialog(
             onDismissRequest = { vm.answerHostKey(false) },
-            title = { Text("Detector de huella SSH") },
+            title = {
+                Text(if (cambiada) "La clave del servidor ha cambiado" else "Detector de huella SSH")
+            },
             text = {
                 Text(
                     buildString {
-                        append("Comprueba la huella del servidor antes de confiar.\n\n")
-                        if (fp != null) {
-                            append("Huella detectada:\n")
-                            append(fp)
-                            append("\n\n")
+                        if (cambiada) {
+                            append("La clave que presenta ahora este servidor NO es la que ")
+                            append("aceptaste la última vez.\n\n")
+                            append("Puede ser que lo hayas reinstalado o cambiado la clave. ")
+                            append("También puede ser que alguien se esté poniendo en medio de ")
+                            append("la conexión para leer lo que mandas.\n\n")
+                            if (fp != null) {
+                                append("Huella nueva:\n")
+                                append(fp)
+                                append("\n\n")
+                            }
+                            append("Confía solo si sabes por qué ha cambiado. Si no, cancela ")
+                            append("y revisa el servidor.")
+                        } else {
+                            append("Comprueba la huella del servidor antes de confiar.\n\n")
+                            if (fp != null) {
+                                append("Huella detectada:\n")
+                                append(fp)
+                                append("\n\n")
+                            }
+                            append("No se publica ni se sube. Solo se guarda en este teléfono si aceptas.")
                         }
-                        append("No se publica ni se sube. Solo se guarda en este teléfono si aceptas.")
                     },
                     modifier = Modifier.padding(top = 4.dp),
                 )
             },
             confirmButton = {
-                TextButton(onClick = { vm.answerHostKey(true) }) { Text("Confiar y conectar") }
+                TextButton(
+                    onClick = { vm.answerHostKey(true) },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = if (cambiada) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
+                    Text(if (cambiada) "Confiar de todos modos" else "Confiar y conectar")
+                }
             },
             dismissButton = {
-                TextButton(onClick = { vm.answerHostKey(false) }) { Text("Cancelar") }
+                TextButton(
+                    onClick = { vm.answerHostKey(false) },
+                    colors = ButtonDefaults.textButtonColors(
+                        // En una clave cambiada, lo prudente es cancelar: que sea
+                        // el botón que más se vea.
+                        contentColor = if (cambiada) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                ) {
+                    Text(if (cambiada) "Cancelar y revisar" else "Cancelar")
+                }
             },
         )
     }

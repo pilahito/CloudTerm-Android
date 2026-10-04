@@ -271,18 +271,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return when {
             host?.protocol == Protocol.FTP || host?.protocol == Protocol.FTPS ->
                 msg.ifBlank { "No se pudo conectar por ${host.protocol.label} al puerto $port." }
-            port in setOf(21, 989, 990) || msg.contains("FTP/FTPS") ->
+            // El orden importa. Antes, «conexión rechazada» caía en la rama de
+            // abajo: el mensaje que arrastraba nombraba FTPS de pasada y se
+            // acababa diciendo «ese puerto es FTPS/FTP» en un 2222 cualquiera,
+            // que es justo uno de los puertos más usados para SSH. Un puerto
+            // cerrado no tiene nada que ver con FTP.
+            msg.contains("Connection refused", ignoreCase = true) ||
+                msg.contains("rechazada", ignoreCase = true) ->
+                "Conexión rechazada en el puerto $port: ahí no hay nadie escuchando. " +
+                    "Revisa el puerto y que el servidor SSH esté levantado."
+            msg.contains("HostKey has been changed") ||
+                msg.contains("IDENTIFICATION HAS CHANGED", ignoreCase = true) ->
+                "No has aceptado la clave nueva del servidor, así que no se ha conectado nada. " +
+                    "Si sabes por qué cambió, vuelve a intentarlo y confía en la huella nueva."
+            port in setOf(21, 989, 990) || msg.contains("es de FTP/FTPS") ->
                 "Ese puerto es FTPS/FTP. Cambia el protocolo del servidor a FTP o FTPS."
-            msg.contains("HostKey has been changed") ->
-                "La huella del servidor ha cambiado. Si lo reinstalaste, borra los datos de la app."
             msg.contains("Auth fail") || msg.contains("Auth cancel") ->
                 "Usuario, contraseña, clave o 2FA incorrectos."
             e is UnknownHostException || msg.contains("UnknownHost") ->
                 "No se encuentra el servidor. Revisa la dirección."
             msg.contains("timeout", ignoreCase = true) ->
                 "El servidor no responde (tiempo agotado)."
-            msg.contains("Connection refused", ignoreCase = true) || msg.contains("rechazada") ->
-                "Conexión rechazada en el puerto $port."
             msg.contains("identificación inválida") || msg.contains("invalid identification") ->
                 "Ese puerto no habla el protocolo SSH."
             msg.contains("reject HostKey") || msg.contains("HostKey") ->

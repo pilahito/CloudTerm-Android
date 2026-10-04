@@ -348,8 +348,8 @@ class SshConnection(
         }
         if (lower.contains("connection refused") || lower.contains("econnrefused")) {
             return JSchException(
-                "Conexión rechazada en el puerto ${host.port}. " +
-                    "Ese puerto no habla SSH. Usa el protocolo FTP/FTPS o el puerto 22.",
+                "Conexión rechazada en el puerto ${host.port}: ahí no hay nadie escuchando. " +
+                    "Comprueba el puerto (SSH usa el 22 por defecto) y que el servidor esté levantado.",
                 e,
             )
         }

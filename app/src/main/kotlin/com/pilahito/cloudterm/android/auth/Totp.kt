@@ -51,4 +51,27 @@ object HostFingerprint {
         val md5 = Regex("MD5(?::[0-9a-fA-F]{2}){16}").find(message)?.value
         return sha ?: md5
     }
+
+    /**
+     * ¿El mensaje de JSch dice que la clave del servidor NO es la que se aceptó
+     * la última vez?
+     *
+     * JSch usa dos mensajes distintos y hay que distinguirlos:
+     *
+     *  * servidor desconocido: «The authenticity of host '…' can't be
+     *    established». Confiar aquí es lo normal la primera vez;
+     *  * clave cambiada: «WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!».
+     *    Puede ser que hayas reinstalado el servidor… o que haya alguien en
+     *    medio. Es el único caso en el que la clave guardada no coincide con la
+     *    que llega, y merece una pantalla distinta.
+     *
+     * Si los dos se pintan igual, el aviso no protege de nada: el usuario pulsa
+     * «confiar» como la primera vez y no se entera de que la clave cambió.
+     *
+     * Al cancelar, JSch lanza «HostKey has been changed: …», así que también se
+     * reconoce ese texto.
+     */
+    fun hasChanged(message: String): Boolean =
+        message.contains("IDENTIFICATION HAS CHANGED", ignoreCase = true) ||
+            message.contains("HostKey has been changed", ignoreCase = true)
 }

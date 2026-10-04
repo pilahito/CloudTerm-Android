@@ -253,7 +253,11 @@ private fun ServersPane(hosts: List<Host>, onOpen: (Host) -> Unit, onEdit: (Host
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(CtCard).clickable { onOpen(host) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(host.name, color = CtText, fontWeight = FontWeight.SemiBold)
-                            Text("${host.protocol.label} · ${host.username}@${host.hostname}", color = CtMuted, fontSize = 12.sp)
+                            // El puerto solo se enseña si no es el de siempre: con
+                            // dos servidores en la misma máquina, la línea salía
+                            // idéntica y no había forma de saber cuál era cuál.
+                            val puerto = if (host.port == host.protocol.defaultPort) "" else ":${host.port}"
+                            Text("${host.protocol.label} · ${host.username}@${host.hostname}$puerto", color = CtMuted, fontSize = 12.sp)
                         }
                         Box(Modifier.size(8.dp).clip(RoundedCornerShape(8.dp)).background(CtOnline))
                         IconButton(onClick = { onEdit(host) }) { Icon(Icons.Filled.Edit, null, tint = CtMuted) }
